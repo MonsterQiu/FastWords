@@ -21,7 +21,8 @@
 | P0-3 | 词典补全 + 真人音频（Free Dictionary API） | ✅ 完成 |
 | P1-A | 内置离线中文词典（ECDICT）+ 考试词书（按 tag 选） | ✅ 完成 |
 | P1-B | UI 重做（向 GlimpseWords 靠：菜单栏只显英文 / 弹窗固定 / 快捷键 / US-UK 双音标 / 视觉） | ✅ 完成 |
-| P1-4 | 导入合并 / 去重 / 预览 | ⬜ 未开始 |
+| P1-C | 多词书管理 + 导入合并去重（保留 SRS 进度） | ✅ 完成 |
+| P1-4 | 导入合并 / 去重 / 预览 | ⬜ 未开始（并入 P1-C） |
 | P1-5 | 系统词典联动 | ⬜ 未开始 |
 | P1-6 | 标准词书格式兼容 | ⬜ 未开始 |
 | P2 | 轮换间隔 / 揭示模式 / 统计 / 多词书 / Keychain | ⬜ 未开始 |
@@ -107,6 +108,22 @@
 - `Scripts/package_app.sh`：修复——把 SPM 生成的 `*.bundle` 资源一起拷进 `Contents/MacOS/`（否则打包后 `Bundle.module` 找不到词库）。打包后 app 仅 **2.2MB**。
 - 测试：`OfflineDictionaryTests`（解析/跳过空词/未知 tag/normalize）、`CompositeDictionaryServiceTests`（回退逻辑）、`OfflineDictionaryDataTests`（**真实 bundle 数据**：abandon 出中文、8 本考试书非空、GRE/CET4 词数合理）。共 34 例全绿。
 - 验证：`swift build` + 34 单测通过；真实 bundle 加载 ~65ms；打包 app 含词库、启动正常。
+
+---
+
+## P1-C：多词书管理 + 导入合并去重
+
+**实现记录**
+- `Sources/FastWordsCore/WordBook.swift`：`WordBook`（id/名字/`WordBookSource`/words/currentIndex）+ `merge(_:)`（按 word 小写去重，**新词追加、已存在的保留原 SRS 进度与数据**，返回 added/skipped）。`WordBookSource`：samples / imported(file) / exam(category)。
+- `WordStore` 改为持有 `[WordBook]` + `currentBookID`；`words`/`currentIndex` 改为**计算属性代理到当前书**，原有所有词操作方法无需改动即可工作。
+- `selectBook(_:)` 切换当前书（各书独立进度）；`importEntries` 合并进当前书（去重保进度）；`loadExamBook` **已存在该考试书则切过去**，否则新建——不再覆盖。
+- **持久化迁移**：`PersistedState` 新增 `books`/`currentBookID`，保留 legacy `words`/`currentIndex` 用于迁移；旧单书结构自动迁成一本《我的词书》。
+- UI：弹窗顶部品牌位改为**词书下拉菜单**（显当前书名 + chevron，可切换，当前书带 ✓）。
+- **修复关键数据丢失 bug**：`settings` 的 `didSet { save() }` 会在 `load()` 中 `books` 尚未填充时触发保存，把旧数据冲成空。加 `isLoading` 守卫 + 迁移后显式 `save()`。**已用真实 5040 词的 state.json 验证迁移零丢失**（先备份再测）。
+- 测试：`WordBookTests`（5 例：合并去重、保进度、空书、masteredCount、exam source 可比）；共 43 例全绿。
+- 验证：`swift build` + 43 单测通过；真实迁移保住 5040 词且 currentIndex 保留；打包 app 启动正常。
+
+> 注：P1-4（导入合并/去重）已并入本阶段完成；尚未做「拖拽导入」与「导入前预览确认弹窗」（当前导入后直接合并并提示 added/skipped）。
 
 ---
 
