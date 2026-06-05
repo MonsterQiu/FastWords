@@ -19,7 +19,11 @@ let package = Package(
         ),
         .executableTarget(
             name: "FastWords",
-            dependencies: ["FastWordsCore"]
+            dependencies: ["FastWordsCore"],
+            resources: [
+                .copy("Fonts/MapleMono-Regular.ttf"),
+                .copy("Fonts/MapleMono-Bold.ttf")
+            ]
         ),
         .testTarget(
             name: "FastWordsCoreTests",
