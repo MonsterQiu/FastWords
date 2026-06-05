@@ -18,10 +18,10 @@ final class ReviewStatsTests: XCTestCase {
 
     func testIntensityBuckets() {
         XCTAssertEqual(ReviewStats.intensity(for: 0), 0)
-        XCTAssertEqual(ReviewStats.intensity(for: 2), 1)
-        XCTAssertEqual(ReviewStats.intensity(for: 5), 2)
-        XCTAssertEqual(ReviewStats.intensity(for: 15), 3)
-        XCTAssertEqual(ReviewStats.intensity(for: 100), 4)
+        XCTAssertEqual(ReviewStats.intensity(for: 10), 1)
+        XCTAssertEqual(ReviewStats.intensity(for: 40), 2)
+        XCTAssertEqual(ReviewStats.intensity(for: 90), 3)
+        XCTAssertEqual(ReviewStats.intensity(for: 200), 4)
     }
 
     func testTotal() {

@@ -183,10 +183,10 @@ struct StatsView: View {
 
     private func shade(_ level: Int) -> Color {
         switch level {
-        case 0: return Color.primary.opacity(0.07)
-        case 1: return Color.blue.opacity(0.30)
-        case 2: return Color.blue.opacity(0.50)
-        case 3: return Color.blue.opacity(0.72)
+        case 0: return Color.primary.opacity(0.06)
+        case 1: return Color.blue.opacity(0.18)
+        case 2: return Color.blue.opacity(0.42)
+        case 3: return Color.blue.opacity(0.70)
         default: return Color.blue
         }
     }
