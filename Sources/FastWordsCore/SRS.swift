@@ -125,4 +125,21 @@ public enum SRS {
         calendar.timeZone = TimeZone.current
         return calendar.date(byAdding: .day, value: days, to: now) ?? now.addingTimeInterval(Double(days) * 86_400)
     }
+
+    // MARK: - Mastery
+
+    /// A word counts as "mastered" once it has been recalled enough times that
+    /// its review interval has stretched comfortably long.
+    public static let masteryRepetitions = 4
+    public static let masteryIntervalDays = 21
+
+    /// Decide a word's learning status from its SRS state: mastered once both
+    /// the streak and the interval thresholds are met; otherwise still learning.
+    /// (A lapse resets `repetitions`/`intervalDays`, so it naturally drops back.)
+    public static func masteryStatus(for state: SRSState) -> WordStatus {
+        if state.repetitions >= masteryRepetitions && state.intervalDays >= masteryIntervalDays {
+            return .mastered
+        }
+        return .learning
+    }
 }
