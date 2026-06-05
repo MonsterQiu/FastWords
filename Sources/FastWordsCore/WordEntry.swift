@@ -22,8 +22,10 @@ public struct WordEntry: Codable, Equatable, Identifiable, Sendable {
     public var createdAt: Date
     public var updatedAt: Date
 
-    /// Spaced-repetition state (SM-2). Defaults model a brand-new, immediately-due card.
+    /// Legacy SM-2 state, kept for backward-compatible decoding and migration.
     public var srs: SRSState
+    /// FSRS-6 memory state (the active scheduler).
+    public var fsrs: FSRSState
 
     /// Local path (relative to the audio cache directory) of a cached pronunciation clip, if any.
     public var audioFileName: String?
@@ -42,6 +44,7 @@ public struct WordEntry: Codable, Equatable, Identifiable, Sendable {
         createdAt: Date = Date(),
         updatedAt: Date = Date(),
         srs: SRSState = SRSState(),
+        fsrs: FSRSState = FSRSState(),
         audioFileName: String? = nil
     ) {
         self.id = id
@@ -57,6 +60,7 @@ public struct WordEntry: Codable, Equatable, Identifiable, Sendable {
         self.createdAt = createdAt
         self.updatedAt = updatedAt
         self.srs = srs
+        self.fsrs = fsrs
         self.audioFileName = audioFileName
     }
 
@@ -77,6 +81,31 @@ public struct WordEntry: Codable, Equatable, Identifiable, Sendable {
         createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
         updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt) ?? Date()
         srs = try container.decodeIfPresent(SRSState.self, forKey: .srs) ?? SRSState()
+        if let savedFSRS = try container.decodeIfPresent(FSRSState.self, forKey: .fsrs) {
+            fsrs = savedFSRS
+        } else {
+            // Migrate from legacy SM-2 state: seed FSRS stability from the old
+            // interval and carry over reps/due so progress isn't reset.
+            fsrs = FSRSState.migrated(fromSM2: srs)
+        }
         audioFileName = try container.decodeIfPresent(String.self, forKey: .audioFileName)
+    }
+}
+
+public extension FSRSState {
+    /// Seed an FSRS state from a legacy SM-2 state so existing reviewed cards
+    /// keep their progress instead of resetting to brand-new.
+    static func migrated(fromSM2 sm2: SRSState) -> FSRSState {
+        guard sm2.repetitions > 0 || sm2.intervalDays > 0 else {
+            return FSRSState() // never reviewed → brand new
+        }
+        return FSRSState(
+            stability: max(FSRS.stabilityMin, Double(max(sm2.intervalDays, 1))),
+            difficulty: 5.0, // neutral starting difficulty
+            reps: max(1, sm2.repetitions),
+            lapses: 0,
+            lastReview: sm2.lastReviewedAt,
+            dueDate: sm2.dueDate
+        )
     }
 }

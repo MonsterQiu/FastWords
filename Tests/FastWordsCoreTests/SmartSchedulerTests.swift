@@ -6,7 +6,7 @@ final class SmartSchedulerTests: XCTestCase {
 
     private func entry(_ word: String, dueOffsetDays: Double, status: WordStatus = .learning) -> WordEntry {
         var e = WordEntry(word: word, status: status)
-        e.srs.dueDate = now.addingTimeInterval(dueOffsetDays * 86_400)
+        e.fsrs.dueDate = now.addingTimeInterval(dueOffsetDays * 86_400)
         return e
     }
 

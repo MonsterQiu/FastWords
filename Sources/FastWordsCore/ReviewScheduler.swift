@@ -63,6 +63,6 @@ public enum ReviewScheduler {
         if lhsMastered != rhsMastered {
             return !lhsMastered // learning word comes first
         }
-        return lhs.srs.dueDate < rhs.srs.dueDate // earlier due = more overdue = first
+        return lhs.fsrs.dueDate < rhs.fsrs.dueDate // earlier due = more overdue = first
     }
 }

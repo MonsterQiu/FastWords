@@ -54,6 +54,9 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// Speak the word automatically whenever a new one is shown.
     public var autoSpeak: Bool
 
+    /// FSRS desired retention (target recall probability, 0.7…0.97).
+    public var desiredRetention: Double
+
     // Which content blocks to show on the word card.
     public var showChinese: Bool
     public var showEnglish: Bool
@@ -74,6 +77,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         speechAccent: SpeechAccent = .american,
         speechRate: Double = 0.45,
         autoSpeak: Bool = false,
+        desiredRetention: Double = 0.9,
         showChinese: Bool = true,
         showEnglish: Bool = false,
         showPhonetic: Bool = true,
@@ -91,6 +95,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         self.speechAccent = speechAccent
         self.speechRate = speechRate
         self.autoSpeak = autoSpeak
+        self.desiredRetention = desiredRetention
         self.showChinese = showChinese
         self.showEnglish = showEnglish
         self.showPhonetic = showPhonetic
@@ -114,6 +119,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         speechAccent = try container.decodeIfPresent(SpeechAccent.self, forKey: .speechAccent) ?? defaults.speechAccent
         speechRate = try container.decodeIfPresent(Double.self, forKey: .speechRate) ?? defaults.speechRate
         autoSpeak = try container.decodeIfPresent(Bool.self, forKey: .autoSpeak) ?? defaults.autoSpeak
+        desiredRetention = try container.decodeIfPresent(Double.self, forKey: .desiredRetention) ?? defaults.desiredRetention
         showChinese = try container.decodeIfPresent(Bool.self, forKey: .showChinese) ?? defaults.showChinese
         showEnglish = try container.decodeIfPresent(Bool.self, forKey: .showEnglish) ?? defaults.showEnglish
         showPhonetic = try container.decodeIfPresent(Bool.self, forKey: .showPhonetic) ?? defaults.showPhonetic
