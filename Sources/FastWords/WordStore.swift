@@ -9,6 +9,8 @@ final class WordStore: ObservableObject {
         var books: [WordBook]?
         var currentBookID: UUID?
         var settings: AppSettings
+        /// Daily review counts (yyyy-MM-dd → grade taps that day).
+        var reviewLog: [String: Int]?
 
         // Legacy single-book fields (pre-multi-book). Decoded for migration.
         var words: [WordEntry]?
@@ -29,6 +31,8 @@ final class WordStore: ObservableObject {
 
     @Published private(set) var books: [WordBook] = []
     @Published private(set) var currentBookID: UUID?
+    /// Daily review counts for the stats heatmap (yyyy-MM-dd → count).
+    @Published private(set) var reviewLog: [String: Int] = [:]
     @Published var settings = AppSettings() {
         didSet { if !isLoading { save() } }
     }
@@ -142,8 +146,8 @@ final class WordStore: ObservableObject {
             let data = try Data(contentsOf: stateURL)
             let decoded = try JSONDecoder.fastWords.decode(PersistedState.self, from: data)
             settings = decoded.settings
+            reviewLog = decoded.reviewLog ?? [:]
 
-            var migrated = false
             if let savedBooks = decoded.books, !savedBooks.isEmpty {
                 books = savedBooks
                 currentBookID = decoded.currentBookID ?? savedBooks.first?.id
@@ -157,7 +161,6 @@ final class WordStore: ObservableObject {
                 )
                 books = [book]
                 currentBookID = book.id
-                migrated = true
             } else {
                 restoreSamples()
                 return
@@ -167,8 +170,10 @@ final class WordStore: ObservableObject {
             if currentBookID == nil { currentBookID = books.first?.id }
             if books.isEmpty {
                 restoreSamples()
-            } else if migrated {
-                // Persist the migrated multi-book shape so it survives next launch.
+            } else {
+                // Persist once on load so any decode-time migration (legacy
+                // single-book → multi-book, or SM-2 → FSRS seeding) is written
+                // to disk in the current format.
                 save()
             }
         } catch {
@@ -187,6 +192,7 @@ final class WordStore: ObservableObject {
                 books: books,
                 currentBookID: currentBookID,
                 settings: settings,
+                reviewLog: reviewLog,
                 words: nil,
                 currentIndex: nil
             )
@@ -220,17 +226,25 @@ final class WordStore: ObservableObject {
         save()
     }
 
-    /// Record how well the current word was recalled, update its SRS schedule
+    /// Record how well the current word was recalled, update its FSRS schedule
     /// and mastery status, then advance to the next word.
     func grade(_ grade: ReviewGrade) {
         guard words.indices.contains(currentIndex) else { return }
         let now = Date()
-        words[currentIndex].srs = SRS.apply(grade, to: words[currentIndex].srs, now: now)
-        // Mastery is a consequence of the SRS schedule, not a separate manual
-        // flag: a long-enough streak/interval marks the word mastered; a lapse
-        // (which resets the streak) drops it back to learning.
-        words[currentIndex].status = SRS.masteryStatus(for: words[currentIndex].srs)
+        words[currentIndex].fsrs = FSRS.review(
+            words[currentIndex].fsrs,
+            grade: grade,
+            now: now,
+            desiredRetention: settings.desiredRetention
+        )
+        // Mastery is a consequence of the FSRS schedule: once memory stability is
+        // high enough the word is mastered; a lapse lowers stability and drops it
+        // back to learning.
+        words[currentIndex].status = FSRS.masteryStatus(for: words[currentIndex].fsrs)
         words[currentIndex].updatedAt = now
+        // Record one review for today's heatmap.
+        let key = ReviewStats.dayKey(for: now)
+        reviewLog[key, default: 0] += 1
         showNext()
     }
 

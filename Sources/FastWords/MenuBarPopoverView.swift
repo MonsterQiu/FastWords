@@ -20,16 +20,30 @@ struct MenuBarPopoverView: View {
                 Divider().overlay(Theme.accent.opacity(0.18))
 
                 if let word = store.currentWord {
+                    // Fixed title area (headword + phonetics) — independent of the
+                    // scrolling content, so its position never changes per word.
+                    titleArea(word)
+                        .padding(.horizontal, 20)
+                        .padding(.top, 14)
+                        .padding(.bottom, 6)
+
+                    // The content area always fills the remaining height, so the
+                    // controls stay pinned to the bottom no matter how much
+                    // content a word has. Long content scrolls inside this region.
                     ScrollView {
                         wordDetail(word)
                             .padding(.horizontal, 20)
-                            .padding(.vertical, 16)
+                            .padding(.vertical, 10)
+                            .frame(maxWidth: .infinity, alignment: .topLeading)
                     }
-                    .scrollIndicators(.never)
+                    .scrollIndicators(.automatic)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+
+                    Divider().overlay(Theme.accent.opacity(0.10))
 
                     controls(for: word)
                         .padding(.horizontal, 20)
-                        .padding(.top, 8)
+                        .padding(.top, 10)
                         .padding(.bottom, 16)
                 } else {
                     emptyState
@@ -99,21 +113,37 @@ struct MenuBarPopoverView: View {
         .fixedSize()
     }
 
-    // MARK: - Word detail
+    // MARK: - Title area (fixed)
+
+    /// Headword + phonetics in a fixed-height region. A small leading inset
+    /// absorbs any negative glyph side-bearing so the first letter never clips,
+    /// and the row clips to its bounds so a long word can't bleed past the edge.
+    private func titleArea(_ entry: WordEntry) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(entry.word)
+                .font(.maple(38, bold: true))
+                .foregroundStyle(Theme.ink)
+                .lineLimit(1)
+                .minimumScaleFactor(0.4)
+                .padding(.leading, 2)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(height: 48)
+                .clipped()
+
+            if store.settings.showPhonetic {
+                phoneticsRow(entry)
+                    .frame(height: 20)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .clipped()
+    }
+
+    // MARK: - Word detail (scrolling content)
 
     private func wordDetail(_ entry: WordEntry) -> some View {
         let settings = store.settings
         return VStack(alignment: .leading, spacing: 12) {
-            Text(entry.word)
-                .font(.maple(40, bold: true))
-                .foregroundStyle(Theme.ink)
-                .lineLimit(1)
-                .minimumScaleFactor(0.5)
-
-            if settings.showPhonetic {
-                phoneticsRow(entry)
-            }
-
             if settings.showShortcutHint {
                 shortcutHint
             }
@@ -170,8 +200,10 @@ struct MenuBarPopoverView: View {
             if !uk.isEmpty, uk != us || !entry.phoneticUK.isEmpty {
                 phoneticChip(label: "UK", value: uk, accent: .british)
             }
-            Spacer()
+            Spacer(minLength: 0)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .clipped()
     }
 
     private func phoneticChip(label: String, value: String, accent: SpeechAccent) -> some View {
@@ -186,14 +218,15 @@ struct MenuBarPopoverView: View {
                     .font(.maple(13))
                     .foregroundStyle(Theme.inkSoft)
                     .lineLimit(1)
-                    .fixedSize()
+                    .truncationMode(.tail)
+                    .layoutPriority(1)
                 Image(systemName: "speaker.wave.2.fill")
                     .font(.system(size: 11))
                     .foregroundStyle(Theme.accent)
             }
         }
         .buttonStyle(.plain)
-        .help("Pronounce (\(label))")
+        .help("\(label) \(MeaningFormatter.formattedPhonetic(value))")
     }
 
     private var shortcutHint: some View {
@@ -290,7 +323,7 @@ struct MenuBarPopoverView: View {
             noticeBlock
 
             HStack(spacing: 12) {
-                navButton(systemImage: "chevron.left", title: "上一条", action: actions.showPrevious)
+                navButton(systemImage: "chevron.left", action: actions.showPrevious)
 
                 if store.settings.reviewMode == .smart {
                     gradeRow
@@ -298,7 +331,7 @@ struct MenuBarPopoverView: View {
                     knownPill(for: entry)
                 }
 
-                navButton(systemImage: "chevron.right", title: "下一条", action: actions.showNext)
+                navButton(systemImage: "chevron.right", action: actions.showNext)
             }
 
             secondaryRow(entry)
@@ -358,14 +391,14 @@ struct MenuBarPopoverView: View {
         .buttonStyle(.plain)
     }
 
-    private func navButton(systemImage: String, title: String, action: @escaping () -> Void) -> some View {
+    /// Icon-only circular nav button (Apple-style) — just a chevron, no label.
+    private func navButton(systemImage: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            VStack(spacing: 2) {
-                Image(systemName: systemImage).font(.system(size: 13, weight: .semibold))
-                Text(title).font(.system(size: 11))
-            }
-            .foregroundStyle(Theme.inkSoft)
-            .frame(width: 48)
+            Image(systemName: systemImage)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(Theme.inkSoft)
+                .frame(width: 34, height: 34)
+                .background(Circle().fill(Color.primary.opacity(0.06)))
         }
         .buttonStyle(.plain)
     }
