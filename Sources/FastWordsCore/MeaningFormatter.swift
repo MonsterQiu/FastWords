@@ -17,4 +17,21 @@ public enum MeaningFormatter {
         let rest = trimmed[trimmed.index(after: dot)...].trimmingCharacters(in: .whitespaces)
         return (head, rest)
     }
+
+    /// Wrap a phonetic transcription in slashes for display, e.g. `ˈklaɪmət`
+    /// or `/ˈklaɪmət/` → `/ˈklaɪmət/`. Returns "" for empty/whitespace input so
+    /// callers can skip rendering.
+    public static func formattedPhonetic(_ phonetic: String) -> String {
+        var s = phonetic.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Strip any existing wrapping slashes or brackets so we don't double them.
+        while let first = s.first, first == "/" || first == "[" {
+            s.removeFirst()
+        }
+        while let last = s.last, last == "/" || last == "]" {
+            s.removeLast()
+        }
+        s = s.trimmingCharacters(in: .whitespaces)
+        guard !s.isEmpty else { return "" }
+        return "/\(s)/"
+    }
 }

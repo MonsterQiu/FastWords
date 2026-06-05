@@ -102,25 +102,58 @@ struct MenuBarPopoverView: View {
     // MARK: - Word detail
 
     private func wordDetail(_ entry: WordEntry) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
+        let settings = store.settings
+        return VStack(alignment: .leading, spacing: 12) {
             Text(entry.word)
-                .font(.system(size: 40, weight: .heavy, design: .rounded))
+                .font(.maple(40, bold: true))
                 .foregroundStyle(Theme.ink)
                 .lineLimit(1)
                 .minimumScaleFactor(0.5)
 
-            phoneticsRow(entry)
+            if settings.showPhonetic {
+                phoneticsRow(entry)
+            }
 
-            shortcutHint
+            if settings.showShortcutHint {
+                shortcutHint
+            }
 
-            meaningBlock(entry)
+            if settings.showChinese {
+                meaningBlock(entry)
+            }
 
-            if !entry.example.isEmpty {
+            if settings.showEnglish, !entry.englishDefinition.isEmpty {
+                englishBlock(entry)
+            }
+
+            if settings.showExample, !entry.example.isEmpty {
                 exampleBlock(entry)
             }
 
-            aiBlock(entry)
+            if settings.showAIHint {
+                aiBlock(entry)
+            }
         }
+    }
+
+    /// English (English-to-English) definition block.
+    private func englishBlock(_ entry: WordEntry) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("英英释义")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(Theme.inkSoft)
+            Text(entry.englishDefinition)
+                .font(.maple(14))
+                .foregroundStyle(Theme.ink)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(Theme.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(Theme.stroke.opacity(0.6), lineWidth: 1)
+        )
     }
 
     /// US + UK phonetics, each with its own speaker. Falls back to the single
@@ -130,7 +163,7 @@ struct MenuBarPopoverView: View {
         let us = entry.phoneticUS.isEmpty ? entry.phonetic : entry.phoneticUS
         let uk = entry.phoneticUK.isEmpty ? entry.phonetic : entry.phoneticUK
 
-        HStack(spacing: 10) {
+        HStack(spacing: 16) {
             if !us.isEmpty {
                 phoneticChip(label: "US", value: us, accent: .american)
             }
@@ -145,27 +178,19 @@ struct MenuBarPopoverView: View {
         Button {
             actions.speak(accent)
         } label: {
-            HStack(spacing: 7) {
+            HStack(spacing: 6) {
                 Text(label)
                     .font(.system(size: 10, weight: .bold))
                     .foregroundStyle(Theme.accent)
-                Text(value)
-                    .font(.system(size: 13, design: .monospaced))
-                    .foregroundStyle(Theme.ink)
+                Text(MeaningFormatter.formattedPhonetic(value))
+                    .font(.maple(13))
+                    .foregroundStyle(Theme.inkSoft)
+                    .lineLimit(1)
+                    .fixedSize()
                 Image(systemName: "speaker.wave.2.fill")
                     .font(.system(size: 11))
                     .foregroundStyle(Theme.accent)
             }
-            .padding(.horizontal, 11)
-            .padding(.vertical, 7)
-            .background(
-                RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .fill(Theme.surface)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .stroke(Theme.accent.opacity(0.5), lineWidth: 1)
-            )
         }
         .buttonStyle(.plain)
         .help("Pronounce (\(label))")
@@ -179,6 +204,15 @@ struct MenuBarPopoverView: View {
                 .font(.system(size: 12))
                 .foregroundStyle(Theme.inkSoft)
             Spacer()
+            Button {
+                store.updateSettings { $0.showShortcutHint = false }
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(Theme.inkSoft)
+            }
+            .buttonStyle(.plain)
+            .help("隐藏快捷键提示（可在设置中重新打开）")
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 9)
