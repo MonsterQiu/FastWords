@@ -13,6 +13,7 @@ struct MenuBarPopoverView: View {
                 wordCard(word)
                 progressBlock
                 controls(for: word)
+                noticeBlock
             } else {
                 emptyState
             }
@@ -130,6 +131,16 @@ struct MenuBarPopoverView: View {
             Text("\(store.masteredCount) mastered · \(store.words.count - store.masteredCount) learning")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+        }
+    }
+
+    @ViewBuilder
+    private var noticeBlock: some View {
+        if let message = store.importMessage {
+            Text(message)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
         }
     }
 

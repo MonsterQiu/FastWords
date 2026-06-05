@@ -146,7 +146,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             store.replaceWords(entries, sourceName: url.lastPathComponent)
             updateStatusTitle()
         } catch {
-            store.failAIInsight(error.localizedDescription)
+            store.showImportError(error.localizedDescription)
         }
     }
 

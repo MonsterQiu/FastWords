@@ -52,12 +52,7 @@ public enum WordBookImporter {
                 let parts = splitPlainTextLine(trimmed)
                 guard let word = parts.first?.trimmedNonEmpty else { return nil }
 
-                return WordEntry(
-                    word: word,
-                    phonetic: parts[safe: 1]?.trimmedNonEmpty ?? "",
-                    meaning: parts[safe: 2]?.trimmedNonEmpty ?? parts[safe: 1]?.trimmedNonEmpty ?? "",
-                    example: parts[safe: 3]?.trimmedNonEmpty ?? ""
-                )
+                return plainTextEntry(word: word, fields: parts)
             }
 
         guard !entries.isEmpty else { throw WordBookImportError.emptyWordBook }
@@ -175,6 +170,22 @@ public enum WordBookImporter {
         }
 
         return [line]
+    }
+
+    private static func plainTextEntry(word: String, fields: [String]) -> WordEntry {
+        if fields.count == 2 {
+            return WordEntry(
+                word: word,
+                meaning: fields[safe: 1]?.trimmedNonEmpty ?? ""
+            )
+        }
+
+        return WordEntry(
+            word: word,
+            phonetic: fields[safe: 1]?.trimmedNonEmpty ?? "",
+            meaning: fields[safe: 2]?.trimmedNonEmpty ?? "",
+            example: fields[safe: 3]?.trimmedNonEmpty ?? ""
+        )
     }
 
     private static func normalizedHeader(_ row: [String]) -> [String] {

@@ -115,6 +115,10 @@ final class WordStore: ObservableObject {
         save()
     }
 
+    func showImportError(_ message: String) {
+        importMessage = message
+    }
+
     func restoreSamples() {
         words = [
             WordEntry(
