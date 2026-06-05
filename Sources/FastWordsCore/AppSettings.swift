@@ -57,7 +57,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public init(
         refreshInterval: TimeInterval = 60,
         displayMode: DisplayMode = .wordAndMeaning,
-        reviewMode: ReviewMode = .sequential,
+        reviewMode: ReviewMode = .smart,
         aiEnabled: Bool = false,
         aiBaseURL: String = "https://api.openai.com/v1",
         aiAPIKey: String = "",

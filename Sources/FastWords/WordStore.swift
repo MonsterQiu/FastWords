@@ -235,10 +235,18 @@ final class WordStore: ObservableObject {
 
         if filled.isEmpty {
             importMessage = result.audioURL == nil
-                ? "Dictionary checked — this word is already complete."
-                : "Dictionary checked — added pronunciation audio."
+                ? "词典已查询：该词信息已完整。"
+                : "词典已查询：已补充真人发音。"
         } else {
-            importMessage = "Dictionary added: \(filled.joined(separator: ", "))."
+            let labels = filled.map { field -> String in
+                switch field {
+                case "phonetic": return "音标"
+                case "meaning": return "释义"
+                case "example": return "例句"
+                default: return field
+                }
+            }
+            importMessage = "词典已补充：\(labels.joined(separator: "、"))。"
         }
         save()
     }

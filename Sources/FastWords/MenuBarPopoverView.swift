@@ -228,26 +228,70 @@ struct MenuBarPopoverView: View {
             HStack(spacing: 12) {
                 navButton(systemImage: "chevron.left", title: "上一条", action: actions.showPrevious)
 
-                Button {
-                    primaryAction(for: entry)
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: entry.status == .mastered ? "checkmark.seal.fill" : "checkmark")
-                        Text(entry.status == .mastered ? "已掌握" : "已认识")
-                    }
-                    .font(.system(size: 15, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                    .background(Theme.accentFill, in: Capsule())
+                if store.settings.reviewMode == .smart {
+                    gradeRow
+                } else {
+                    knownPill(for: entry)
                 }
-                .buttonStyle(.plain)
 
                 navButton(systemImage: "chevron.right", title: "下一条", action: actions.showNext)
             }
 
             secondaryRow(entry)
         }
+    }
+
+    /// Three-way recall grading (Smart mode) — drives the SM-2 schedule and
+    /// advances to the next word.
+    private var gradeRow: some View {
+        HStack(spacing: 6) {
+            ForEach(ReviewGrade.allCases) { grade in
+                Button {
+                    actions.grade(grade)
+                } label: {
+                    Text(grade.title)
+                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                        .foregroundStyle(color(for: grade))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(color(for: grade).opacity(0.15), in: Capsule())
+                        .overlay(Capsule().stroke(color(for: grade).opacity(0.35), lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+                .help(grade.title)
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private func color(for grade: ReviewGrade) -> Color {
+        switch grade {
+        case .again:
+            Color(.systemRed)
+        case .hard:
+            Color(.systemOrange)
+        case .good:
+            Theme.accent
+        }
+    }
+
+    /// Single "known" action for sequential/random modes (no SRS scheduling).
+    private func knownPill(for entry: WordEntry) -> some View {
+        Button {
+            actions.toggleMastered()
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: entry.status == .mastered ? "checkmark.seal.fill" : "checkmark")
+                Text(entry.status == .mastered ? "已掌握" : "已认识")
+            }
+            .font(.system(size: 15, weight: .semibold, design: .rounded))
+            .foregroundStyle(Theme.accent)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 11)
+            .background(Theme.accent.opacity(0.15), in: Capsule())
+            .overlay(Capsule().stroke(Theme.accent.opacity(0.35), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
     }
 
     private func navButton(systemImage: String, title: String, action: @escaping () -> Void) -> some View {
@@ -257,12 +301,13 @@ struct MenuBarPopoverView: View {
                 Text(title).font(.system(size: 11))
             }
             .foregroundStyle(Theme.inkSoft)
-            .frame(width: 56)
+            .frame(width: 48)
         }
         .buttonStyle(.plain)
     }
 
-    /// Smart mode grades the word "known" via SRS; other modes just mark mastered.
+    /// Smart-mode "known" via the Space shortcut grades the word `good`; other
+    /// modes mark it mastered.
     private func primaryAction(for entry: WordEntry) {
         if store.settings.reviewMode == .smart {
             actions.grade(.good)
