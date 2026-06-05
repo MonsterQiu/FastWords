@@ -46,13 +46,14 @@ public enum ReviewStats {
     }
 
     /// Intensity level 0...4 for a count, used to pick a color shade.
+    /// Scaled so the darkest shade represents a heavy ~200-review day.
     public static func intensity(for count: Int) -> Int {
         switch count {
         case 0: return 0
-        case 1...3: return 1
-        case 4...9: return 2
-        case 10...19: return 3
-        default: return 4
+        case 1...19: return 1
+        case 20...59: return 2
+        case 60...119: return 3
+        default: return 4 // 120+, fully saturated at ~200
         }
     }
 
