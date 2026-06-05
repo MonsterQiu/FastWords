@@ -54,6 +54,15 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// Speak the word automatically whenever a new one is shown.
     public var autoSpeak: Bool
 
+    // Which content blocks to show on the word card.
+    public var showChinese: Bool
+    public var showEnglish: Bool
+    public var showPhonetic: Bool
+    public var showExample: Bool
+    public var showAIHint: Bool
+    /// Show the keyboard-shortcut hint bar on the word card.
+    public var showShortcutHint: Bool
+
     public init(
         refreshInterval: TimeInterval = 60,
         displayMode: DisplayMode = .wordAndMeaning,
@@ -64,7 +73,13 @@ public struct AppSettings: Codable, Equatable, Sendable {
         aiModel: String = "",
         speechAccent: SpeechAccent = .american,
         speechRate: Double = 0.45,
-        autoSpeak: Bool = false
+        autoSpeak: Bool = false,
+        showChinese: Bool = true,
+        showEnglish: Bool = false,
+        showPhonetic: Bool = true,
+        showExample: Bool = true,
+        showAIHint: Bool = true,
+        showShortcutHint: Bool = true
     ) {
         self.refreshInterval = refreshInterval
         self.displayMode = displayMode
@@ -76,6 +91,12 @@ public struct AppSettings: Codable, Equatable, Sendable {
         self.speechAccent = speechAccent
         self.speechRate = speechRate
         self.autoSpeak = autoSpeak
+        self.showChinese = showChinese
+        self.showEnglish = showEnglish
+        self.showPhonetic = showPhonetic
+        self.showExample = showExample
+        self.showAIHint = showAIHint
+        self.showShortcutHint = showShortcutHint
     }
 
     // Backward-compatible decoding: settings saved before pronunciation existed
@@ -93,5 +114,11 @@ public struct AppSettings: Codable, Equatable, Sendable {
         speechAccent = try container.decodeIfPresent(SpeechAccent.self, forKey: .speechAccent) ?? defaults.speechAccent
         speechRate = try container.decodeIfPresent(Double.self, forKey: .speechRate) ?? defaults.speechRate
         autoSpeak = try container.decodeIfPresent(Bool.self, forKey: .autoSpeak) ?? defaults.autoSpeak
+        showChinese = try container.decodeIfPresent(Bool.self, forKey: .showChinese) ?? defaults.showChinese
+        showEnglish = try container.decodeIfPresent(Bool.self, forKey: .showEnglish) ?? defaults.showEnglish
+        showPhonetic = try container.decodeIfPresent(Bool.self, forKey: .showPhonetic) ?? defaults.showPhonetic
+        showExample = try container.decodeIfPresent(Bool.self, forKey: .showExample) ?? defaults.showExample
+        showAIHint = try container.decodeIfPresent(Bool.self, forKey: .showAIHint) ?? defaults.showAIHint
+        showShortcutHint = try container.decodeIfPresent(Bool.self, forKey: .showShortcutHint) ?? defaults.showShortcutHint
     }
 }

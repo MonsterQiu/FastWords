@@ -4,13 +4,22 @@ import Foundation
 public struct DictionaryResult: Equatable, Sendable {
     public var phonetic: String
     public var meaning: String
+    /// English (English-to-English) definition, when available.
+    public var englishDefinition: String
     public var example: String
     /// Remote URL of a human pronunciation clip, if the source provided one.
     public var audioURL: URL?
 
-    public init(phonetic: String = "", meaning: String = "", example: String = "", audioURL: URL? = nil) {
+    public init(
+        phonetic: String = "",
+        meaning: String = "",
+        englishDefinition: String = "",
+        example: String = "",
+        audioURL: URL? = nil
+    ) {
         self.phonetic = phonetic
         self.meaning = meaning
+        self.englishDefinition = englishDefinition
         self.example = example
         self.audioURL = audioURL
     }
@@ -95,7 +104,16 @@ public struct FreeDictionaryService: DictionaryService {
         let audioURL = audioPhonetic?.audio.flatMap { URL(string: $0) }
 
         guard !meaning.isEmpty || !textPhonetic.isEmpty || audioURL != nil else { return nil }
-        return DictionaryResult(phonetic: textPhonetic, meaning: meaning, example: example, audioURL: audioURL)
+        // Free Dictionary is English-to-English: its definition is the English
+        // definition. Surface it in both fields so it's useful whether or not a
+        // Chinese meaning is present.
+        return DictionaryResult(
+            phonetic: textPhonetic,
+            meaning: meaning,
+            englishDefinition: meaning,
+            example: example,
+            audioURL: audioURL
+        )
     }
 
     // MARK: - API model

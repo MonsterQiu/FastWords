@@ -14,6 +14,8 @@ public struct WordEntry: Codable, Equatable, Identifiable, Sendable {
     public var phoneticUS: String
     public var phoneticUK: String
     public var meaning: String
+    /// English (English-to-English) definition, when available.
+    public var englishDefinition: String
     public var example: String
     public var note: String
     public var status: WordStatus
@@ -33,6 +35,7 @@ public struct WordEntry: Codable, Equatable, Identifiable, Sendable {
         phoneticUS: String = "",
         phoneticUK: String = "",
         meaning: String = "",
+        englishDefinition: String = "",
         example: String = "",
         note: String = "",
         status: WordStatus = .learning,
@@ -47,6 +50,7 @@ public struct WordEntry: Codable, Equatable, Identifiable, Sendable {
         self.phoneticUS = phoneticUS
         self.phoneticUK = phoneticUK
         self.meaning = meaning
+        self.englishDefinition = englishDefinition
         self.example = example
         self.note = note
         self.status = status
@@ -66,6 +70,7 @@ public struct WordEntry: Codable, Equatable, Identifiable, Sendable {
         phoneticUS = try container.decodeIfPresent(String.self, forKey: .phoneticUS) ?? ""
         phoneticUK = try container.decodeIfPresent(String.self, forKey: .phoneticUK) ?? ""
         meaning = try container.decodeIfPresent(String.self, forKey: .meaning) ?? ""
+        englishDefinition = try container.decodeIfPresent(String.self, forKey: .englishDefinition) ?? ""
         example = try container.decodeIfPresent(String.self, forKey: .example) ?? ""
         note = try container.decodeIfPresent(String.self, forKey: .note) ?? ""
         status = try container.decodeIfPresent(WordStatus.self, forKey: .status) ?? .learning
