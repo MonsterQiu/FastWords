@@ -132,7 +132,7 @@ struct MenuBarPopoverView: View {
 
             if store.settings.showPhonetic {
                 phoneticsRow(entry)
-                    .frame(height: 20)
+                    .frame(height: 44)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -186,24 +186,23 @@ struct MenuBarPopoverView: View {
         )
     }
 
-    /// US + UK phonetics, each with its own speaker. Falls back to the single
-    /// `phonetic` when a source doesn't distinguish accents.
+    /// US + UK phonetics, stacked vertically (one per line) so even long
+    /// transcriptions show in full. Falls back to the single `phonetic` when a
+    /// source doesn't distinguish accents.
     @ViewBuilder
     private func phoneticsRow(_ entry: WordEntry) -> some View {
         let us = entry.phoneticUS.isEmpty ? entry.phonetic : entry.phoneticUS
         let uk = entry.phoneticUK.isEmpty ? entry.phonetic : entry.phoneticUK
 
-        HStack(spacing: 16) {
+        VStack(alignment: .leading, spacing: 4) {
             if !us.isEmpty {
                 phoneticChip(label: "US", value: us, accent: .american)
             }
             if !uk.isEmpty, uk != us || !entry.phoneticUK.isEmpty {
                 phoneticChip(label: "UK", value: uk, accent: .british)
             }
-            Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .clipped()
     }
 
     private func phoneticChip(label: String, value: String, accent: SpeechAccent) -> some View {
@@ -214,12 +213,12 @@ struct MenuBarPopoverView: View {
                 Text(label)
                     .font(.system(size: 10, weight: .bold))
                     .foregroundStyle(Theme.accent)
+                    .frame(width: 20, alignment: .leading)
                 Text(MeaningFormatter.formattedPhonetic(value))
                     .font(.maple(13))
                     .foregroundStyle(Theme.inkSoft)
                     .lineLimit(1)
-                    .truncationMode(.tail)
-                    .layoutPriority(1)
+                    .minimumScaleFactor(0.7)
                 Image(systemName: "speaker.wave.2.fill")
                     .font(.system(size: 11))
                     .foregroundStyle(Theme.accent)
@@ -419,7 +418,6 @@ struct MenuBarPopoverView: View {
                 .disabled(store.lookupState == .loading)
             iconLink("sparkles", "AI 提示", action: actions.generateAIInsight)
                 .disabled(!store.settings.aiEnabled || store.aiState == .loading)
-            iconLink("square.and.arrow.down", "导入", action: actions.importWordBook)
             Spacer()
             iconLink("gearshape", "设置", action: actions.openSettings)
         }
