@@ -17,6 +17,13 @@ mkdir -p "$MACOS_DIR"
 
 cp "$ROOT_DIR/.build/release/$APP_NAME" "$MACOS_DIR/$APP_NAME"
 
+# Copy SPM-generated resource bundles (e.g. the bundled ECDICT dictionary) next
+# to the executable, where Bundle.module expects to find them.
+for bundle in "$ROOT_DIR"/.build/release/*.bundle; do
+  [ -e "$bundle" ] || continue
+  cp -R "$bundle" "$MACOS_DIR/"
+done
+
 cat > "$CONTENTS_DIR/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
