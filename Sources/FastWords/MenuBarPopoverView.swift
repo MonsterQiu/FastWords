@@ -49,9 +49,8 @@ struct MenuBarPopoverView: View {
         HStack(spacing: 8) {
             Image(systemName: "book.closed.fill")
                 .foregroundStyle(Theme.accent)
-            Text("FastWords")
-                .font(.system(size: 16, weight: .semibold, design: .rounded))
-                .foregroundStyle(Theme.ink)
+
+            bookSwitcher
 
             Spacer()
 
@@ -67,6 +66,37 @@ struct MenuBarPopoverView: View {
             .buttonStyle(.plain)
             .help("Settings")
         }
+    }
+
+    /// Dropdown that shows the current book name and switches between books,
+    /// each keeping its own progress.
+    private var bookSwitcher: some View {
+        Menu {
+            ForEach(store.books) { book in
+                Button {
+                    store.selectBook(book.id)
+                } label: {
+                    if book.id == store.currentBookID {
+                        Label(book.name, systemImage: "checkmark")
+                    } else {
+                        Text(book.name)
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 3) {
+                Text(store.currentBook?.name ?? "FastWords")
+                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+                    .foregroundStyle(Theme.ink)
+                    .lineLimit(1)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(Theme.inkSoft)
+            }
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
     }
 
     // MARK: - Word detail

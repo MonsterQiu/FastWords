@@ -3,88 +3,305 @@ import SwiftUI
 
 struct SettingsView: View {
     @ObservedObject var store: WordStore
-    @State private var selectedExam: ExamCategory = .cet4
 
-    private let refreshOptions: [(String, TimeInterval)] = [
-        ("Manual", 0),
-        ("30 seconds", 30),
-        ("1 minute", 60),
-        ("5 minutes", 300),
-        ("15 minutes", 900)
-    ]
-
-    var body: some View {
-        Form {
-            Section("Review") {
-                Picker("Refresh", selection: binding(\.refreshInterval)) {
-                    ForEach(refreshOptions, id: \.1) { option in
-                        Text(option.0).tag(option.1)
-                    }
-                }
-
-                Picker("Order", selection: binding(\.reviewMode)) {
-                    ForEach(ReviewMode.allCases) { mode in
-                        Text(mode.title).tag(mode)
-                    }
-                }
-            }
-
-            Section("Pronunciation") {
-                Picker("Accent", selection: binding(\.speechAccent)) {
-                    ForEach(SpeechAccent.allCases) { accent in
-                        Text(accent.title).tag(accent)
-                    }
-                }
-
-                HStack {
-                    Text("Speed")
-                    Slider(value: binding(\.speechRate), in: 0...1)
-                }
-
-                Toggle("Speak each new word automatically", isOn: binding(\.autoSpeak))
-
-                Text("Uses the built-in macOS voice — fully offline, no setup.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Section("Exam Word Books") {
-                Picker("Exam", selection: $selectedExam) {
-                    ForEach(ExamCategory.allCases) { exam in
-                        Text(exam.title).tag(exam)
-                    }
-                }
-
-                Button("Load this word book") {
-                    store.loadExamBook(selectedExam)
-                }
-
-                Text("Built-in offline 中英词典 (ECDICT). Loading replaces the current word book.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Section("AI") {
-                Toggle("Enable AI hints", isOn: binding(\.aiEnabled))
-
-                TextField("Base URL", text: binding(\.aiBaseURL))
-                    .textFieldStyle(.roundedBorder)
-
-                TextField("Model", text: binding(\.aiModel))
-                    .textFieldStyle(.roundedBorder)
-
-                SecureField("API Key", text: binding(\.aiAPIKey))
-                    .textFieldStyle(.roundedBorder)
-
-                Text("Uses an OpenAI-compatible /chat/completions endpoint.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+    private enum Section: String, CaseIterable, Identifiable {
+        case review, pronunciation, books, ai
+        var id: String { rawValue }
+        var title: String {
+            switch self {
+            case .review: "复习"
+            case .pronunciation: "发音"
+            case .books: "词书"
+            case .ai: "AI 助手"
             }
         }
-        .formStyle(.grouped)
-        .padding(20)
-        .frame(width: 460, height: 540)
+        var icon: String {
+            switch self {
+            case .review: "arrow.triangle.2.circlepath"
+            case .pronunciation: "speaker.wave.2"
+            case .books: "books.vertical"
+            case .ai: "sparkles"
+            }
+        }
     }
+
+    @State private var selection: Section = .review
+
+    var body: some View {
+        HStack(spacing: 0) {
+            sidebar
+                .frame(width: 168)
+                .frame(maxHeight: .infinity)
+                .background(.quaternary.opacity(0.5))
+
+            Divider()
+
+            detail
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .padding(24)
+        }
+        .frame(width: 600, height: 460)
+    }
+
+    private var sidebar: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            ForEach(Section.allCases) { section in
+                Button {
+                    selection = section
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: section.icon)
+                            .frame(width: 18)
+                        Text(section.title)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .contentShape(Rectangle())
+                    .background(
+                        RoundedRectangle(cornerRadius: 7, style: .continuous)
+                            .fill(selection == section ? Color.accentColor.opacity(0.18) : .clear)
+                    )
+                    .foregroundStyle(selection == section ? Color.accentColor : Color.primary)
+                }
+                .buttonStyle(.plain)
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 10)
+        .padding(.top, 14)
+    }
+
+    @ViewBuilder
+    private var detail: some View {
+        switch selection {
+        case .review: reviewSettings
+        case .pronunciation: pronunciationSettings
+        case .books: bookSettings
+        case .ai: aiSettings
+        }
+    }
+
+    // MARK: - 复习
+
+    private let refreshOptions: [(String, TimeInterval)] = [
+        ("手动（不自动翻页）", 0),
+        ("30 秒", 30),
+        ("1 分钟", 60),
+        ("5 分钟", 300),
+        ("15 分钟", 900)
+    ]
+
+    private var reviewSettings: some View {
+        Form {
+            Picker("自动翻页间隔", selection: binding(\.refreshInterval)) {
+                ForEach(refreshOptions, id: \.1) { option in
+                    Text(option.0).tag(option.1)
+                }
+            }
+
+            Picker("复习顺序", selection: binding(\.reviewMode)) {
+                ForEach(ReviewMode.allCases) { mode in
+                    Text(reviewModeTitle(mode)).tag(mode)
+                }
+            }
+
+            Text("「智能」模式按间隔重复（SM-2）优先安排到期和薄弱的单词。")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .formStyle(.grouped)
+    }
+
+    private func reviewModeTitle(_ mode: ReviewMode) -> String {
+        switch mode {
+        case .sequential: "顺序"
+        case .random: "随机"
+        case .smart: "智能（间隔重复）"
+        }
+    }
+
+    // MARK: - 发音
+
+    private var pronunciationSettings: some View {
+        Form {
+            Picker("口音", selection: binding(\.speechAccent)) {
+                ForEach(SpeechAccent.allCases) { accent in
+                    Text(accentTitle(accent)).tag(accent)
+                }
+            }
+
+            HStack {
+                Text("语速")
+                Slider(value: binding(\.speechRate), in: 0...1)
+            }
+
+            Toggle("翻到新词时自动朗读", isOn: binding(\.autoSpeak))
+
+            Text("使用 macOS 内置语音，完全离线、无需配置。有真人音频时优先播放真人发音。")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .formStyle(.grouped)
+    }
+
+    private func accentTitle(_ accent: SpeechAccent) -> String {
+        switch accent {
+        case .american: "美音（en-US）"
+        case .british: "英音（en-GB）"
+        }
+    }
+
+    // MARK: - 词书
+
+    /// Word counts per exam category (cached once; the dictionary is read-only).
+    private var examCounts: [ExamCategory: Int] { OfflineDictionary.shared.counts() }
+
+    private let bookColumns = [GridItem(.adaptive(minimum: 150), spacing: 12)]
+
+    private var bookSettings: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("考试词库")
+                    .font(.headline)
+                Text("内置离线中英词典（ECDICT），全部免费。点击卡片加载或切换；已加载的词书保留各自进度。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                LazyVGrid(columns: bookColumns, spacing: 12) {
+                    ForEach(ExamCategory.allCases) { exam in
+                        examCard(exam)
+                    }
+                }
+
+                let extras = store.books.filter { if case .exam = $0.source { return false } else { return true } }
+                if !extras.isEmpty {
+                    Text("其他词书")
+                        .font(.headline)
+                        .padding(.top, 4)
+                    LazyVGrid(columns: bookColumns, spacing: 12) {
+                        ForEach(extras) { book in
+                            customCard(book)
+                        }
+                    }
+                }
+            }
+            .padding(2)
+        }
+    }
+
+    /// A card for a built-in exam word book. Loaded books show progress and an
+    /// "in use" marker; unloaded ones invite a tap to load.
+    private func examCard(_ exam: ExamCategory) -> some View {
+        let loaded = store.books.first { $0.source == .exam(exam) }
+        let isCurrent = loaded?.id == store.currentBookID && loaded != nil
+        let total = examCounts[exam] ?? 0
+
+        return Button {
+            store.loadExamBook(exam)
+        } label: {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text(exam.title)
+                        .font(.system(size: 15, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.primary)
+                    Spacer()
+                    if isCurrent {
+                        Image(systemName: "checkmark.circle.fill").foregroundStyle(.blue)
+                    }
+                }
+
+                if let loaded {
+                    Text("\(loaded.words.count) 词 · \(loaded.masteredCount) 已掌握")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Label(isCurrent ? "使用中" : "点击切换",
+                          systemImage: isCurrent ? "largecircle.fill.circle" : "arrow.left.arrow.right")
+                        .font(.caption)
+                        .foregroundStyle(isCurrent ? .blue : .secondary)
+                } else {
+                    Text("\(total) 词")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Label("点击加载", systemImage: "arrow.down.circle")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .frame(maxWidth: .infinity, minHeight: 84, alignment: .topLeading)
+            .padding(12)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(isCurrent ? Color.blue.opacity(0.10) : Color.primary.opacity(0.04))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(isCurrent ? Color.blue.opacity(0.7) : Color.primary.opacity(0.10), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// A card for a non-exam book (imported file or the sample book).
+    private func customCard(_ book: WordBook) -> some View {
+        let isCurrent = book.id == store.currentBookID
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(book.name)
+                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+                    .lineLimit(1)
+                Spacer()
+                if isCurrent { Image(systemName: "checkmark.circle.fill").foregroundStyle(.blue) }
+            }
+            Text("\(book.words.count) 词 · \(book.masteredCount) 已掌握")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            HStack(spacing: 12) {
+                if !isCurrent {
+                    Button("切换") { store.selectBook(book.id) }
+                        .buttonStyle(.link)
+                }
+                Button(role: .destructive) { store.deleteBook(book.id) } label: {
+                    Image(systemName: "trash")
+                }
+                .buttonStyle(.borderless)
+                .help("删除词书")
+            }
+            .font(.caption)
+        }
+        .frame(maxWidth: .infinity, minHeight: 84, alignment: .topLeading)
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(isCurrent ? Color.blue.opacity(0.10) : Color.primary.opacity(0.04))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(isCurrent ? Color.blue.opacity(0.7) : Color.primary.opacity(0.10), lineWidth: 1)
+        )
+    }
+
+    // MARK: - AI
+
+    private var aiSettings: some View {
+        Form {
+            Toggle("启用 AI 记忆提示", isOn: binding(\.aiEnabled))
+
+            TextField("接口地址（Base URL）", text: binding(\.aiBaseURL))
+                .textFieldStyle(.roundedBorder)
+            TextField("模型名称", text: binding(\.aiModel))
+                .textFieldStyle(.roundedBorder)
+            SecureField("API Key", text: binding(\.aiAPIKey))
+                .textFieldStyle(.roundedBorder)
+
+            Text("使用兼容 OpenAI 的 /chat/completions 接口，由你自己的服务商提供。")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .formStyle(.grouped)
+    }
+
+    // MARK: - Helpers
 
     private func binding<Value>(_ keyPath: WritableKeyPath<AppSettings, Value>) -> Binding<Value> {
         Binding(
