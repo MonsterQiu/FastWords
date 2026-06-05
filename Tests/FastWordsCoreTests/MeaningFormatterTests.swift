@@ -25,4 +25,19 @@ final class MeaningFormatterTests: XCTestCase {
         XCTAssertNil(pos)
         XCTAssertEqual(body, "纯中文释义")
     }
+
+    func testFormattedPhoneticWrapsBareTranscription() {
+        XCTAssertEqual(MeaningFormatter.formattedPhonetic("ˈklaɪmət"), "/ˈklaɪmət/")
+        XCTAssertEqual(MeaningFormatter.formattedPhonetic("ә'bændәn"), "/ә'bændәn/")
+    }
+
+    func testFormattedPhoneticDoesNotDoubleSlashes() {
+        XCTAssertEqual(MeaningFormatter.formattedPhonetic("/ˈklaɪmət/"), "/ˈklaɪmət/")
+        XCTAssertEqual(MeaningFormatter.formattedPhonetic(" [ˈklaɪmət] "), "/ˈklaɪmət/")
+    }
+
+    func testFormattedPhoneticEmptyStaysEmpty() {
+        XCTAssertEqual(MeaningFormatter.formattedPhonetic("   "), "")
+        XCTAssertEqual(MeaningFormatter.formattedPhonetic(""), "")
+    }
 }

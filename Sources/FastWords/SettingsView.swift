@@ -94,21 +94,32 @@ struct SettingsView: View {
 
     private var reviewSettings: some View {
         Form {
-            Picker("自动翻页间隔", selection: binding(\.refreshInterval)) {
-                ForEach(refreshOptions, id: \.1) { option in
-                    Text(option.0).tag(option.1)
+            SwiftUI.Section {
+                Picker("自动翻页间隔", selection: binding(\.refreshInterval)) {
+                    ForEach(refreshOptions, id: \.1) { option in
+                        Text(option.0).tag(option.1)
+                    }
                 }
+
+                Picker("复习顺序", selection: binding(\.reviewMode)) {
+                    ForEach(ReviewMode.allCases) { mode in
+                        Text(reviewModeTitle(mode)).tag(mode)
+                    }
+                }
+
+                Text("「智能」模式按间隔重复（SM-2）优先安排到期和薄弱的单词。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
-            Picker("复习顺序", selection: binding(\.reviewMode)) {
-                ForEach(ReviewMode.allCases) { mode in
-                    Text(reviewModeTitle(mode)).tag(mode)
-                }
+            SwiftUI.Section("卡片显示内容") {
+                Toggle("中文释义", isOn: binding(\.showChinese))
+                Toggle("英英释义", isOn: binding(\.showEnglish))
+                Toggle("音标", isOn: binding(\.showPhonetic))
+                Toggle("例句", isOn: binding(\.showExample))
+                Toggle("AI 记忆提示", isOn: binding(\.showAIHint))
+                Toggle("快捷键提示栏", isOn: binding(\.showShortcutHint))
             }
-
-            Text("「智能」模式按间隔重复（SM-2）优先安排到期和薄弱的单词。")
-                .font(.caption)
-                .foregroundStyle(.secondary)
         }
         .formStyle(.grouped)
     }
@@ -167,6 +178,19 @@ struct SettingsView: View {
                 Text("内置离线中英词典（ECDICT），全部免费。点击卡片加载或切换；已加载的词书保留各自进度。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+
+                if let book = store.currentBook {
+                    HStack(spacing: 8) {
+                        Text("当前《\(book.name)》")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Button("补全英英/释义") {
+                            store.enrichCurrentBookFromOffline()
+                        }
+                        .help("为旧词书从内置词典补上英英释义等缺失内容")
+                    }
+                }
 
                 LazyVGrid(columns: bookColumns, spacing: 12) {
                     ForEach(ExamCategory.allCases) { exam in
