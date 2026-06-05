@@ -24,11 +24,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var cancellables: Set<AnyCancellable> = []
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        installMainMenu()
         configureStatusItem()
         configurePopover()
         bindStore()
         scheduleTimer()
         updateStatusTitle()
+    }
+
+    /// A menu-bar (.accessory) app has no main menu by default, so the standard
+    /// editing shortcuts (⌘C/⌘V/⌘X/⌘A) are never dispatched to the focused text
+    /// field. Install a minimal Edit menu wired to the responder-chain selectors
+    /// so paste works in the settings text fields.
+    private func installMainMenu() {
+        let mainMenu = NSMenu()
+
+        // App menu (provides ⌘Q quit).
+        let appItem = NSMenuItem()
+        mainMenu.addItem(appItem)
+        let appMenu = NSMenu()
+        appMenu.addItem(withTitle: "退出 FastWords", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        appItem.submenu = appMenu
+
+        // Edit menu (provides ⌘X/⌘C/⌘V/⌘A in text fields).
+        let editItem = NSMenuItem()
+        mainMenu.addItem(editItem)
+        let editMenu = NSMenu(title: "编辑")
+        editMenu.addItem(withTitle: "剪切", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        editMenu.addItem(withTitle: "复制", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        editMenu.addItem(withTitle: "粘贴", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        editMenu.addItem(withTitle: "全选", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+        editItem.submenu = editMenu
+
+        NSApp.mainMenu = mainMenu
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -80,12 +108,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func bindStore() {
-        store.$words
+        // Any change to the books (current word, index, switching books) or the
+        // selected book refreshes the menu bar title.
+        store.$books
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.updateStatusTitle() }
             .store(in: &cancellables)
 
-        store.$currentIndex
+        store.$currentBookID
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.updateStatusTitle() }
             .store(in: &cancellables)
@@ -116,11 +146,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         timer = Timer.scheduledTimer(withTimeInterval: store.settings.refreshInterval, repeats: true) { [weak self] _ in
             Task { @MainActor in
-                self?.store.showNext()
+                guard let self else { return }
+                // Don't auto-advance while the popover is open — the user is
+                // looking at or interacting with the current word.
+                guard !self.popover.isShown else { return }
+                self.store.showNext()
                 // Ambient timer rotation only updates the menu bar; it never
                 // speaks unprompted (the Mac shouldn't talk to itself while the
                 // user is away). Auto-speak is reserved for user navigation.
-                self?.updateStatusTitle()
+                self.updateStatusTitle()
             }
         }
     }
@@ -213,7 +247,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         do {
             let entries = try WordBookImporter.importEntries(from: url)
-            store.replaceWords(entries, sourceName: url.lastPathComponent)
+            store.importEntries(entries, sourceName: url.lastPathComponent)
             updateStatusTitle()
         } catch {
             store.showImportError(error.localizedDescription)
@@ -242,10 +276,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func openSettings() {
         if settingsWindowController == nil {
             settingsWindowController = SettingsWindowController(store: store)
+            // Revert to a menu-bar-only app once the settings window closes.
+            if let window = settingsWindowController?.window {
+                NotificationCenter.default.addObserver(
+                    self,
+                    selector: #selector(settingsWindowWillClose),
+                    name: NSWindow.willCloseNotification,
+                    object: window
+                )
+            }
         }
 
+        // Dismiss the transient popover first; leaving it open can keep the app
+        // from giving the settings window keyboard focus (so paste/⌘V fails).
+        if popover.isShown { popover.performClose(nil) }
+
+        // An .accessory app won't reliably give a window key/focus. Switch to
+        // .regular while settings is open so text fields accept typing & paste.
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate(ignoringOtherApps: true)
         settingsWindowController?.showWindow(nil)
         settingsWindowController?.window?.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    @objc
+    private func settingsWindowWillClose() {
+        NSApp.setActivationPolicy(.accessory)
     }
 }
