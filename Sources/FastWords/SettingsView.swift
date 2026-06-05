@@ -5,10 +5,11 @@ struct SettingsView: View {
     @ObservedObject var store: WordStore
 
     private enum Section: String, CaseIterable, Identifiable {
-        case review, pronunciation, books, ai
+        case stats, review, pronunciation, books, ai
         var id: String { rawValue }
         var title: String {
             switch self {
+            case .stats: "统计"
             case .review: "复习"
             case .pronunciation: "发音"
             case .books: "词书"
@@ -17,6 +18,7 @@ struct SettingsView: View {
         }
         var icon: String {
             switch self {
+            case .stats: "chart.bar.xaxis"
             case .review: "arrow.triangle.2.circlepath"
             case .pronunciation: "speaker.wave.2"
             case .books: "books.vertical"
@@ -25,7 +27,7 @@ struct SettingsView: View {
         }
     }
 
-    @State private var selection: Section = .review
+    @State private var selection: Section = .stats
 
     var body: some View {
         HStack(spacing: 0) {
@@ -75,6 +77,7 @@ struct SettingsView: View {
     @ViewBuilder
     private var detail: some View {
         switch selection {
+        case .stats: StatsView(store: store)
         case .review: reviewSettings
         case .pronunciation: pronunciationSettings
         case .books: bookSettings
