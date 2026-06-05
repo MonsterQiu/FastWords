@@ -3,6 +3,7 @@ import SwiftUI
 
 struct SettingsView: View {
     @ObservedObject var store: WordStore
+    @State private var selectedExam: ExamCategory = .cet4
 
     private let refreshOptions: [(String, TimeInterval)] = [
         ("Manual", 0),
@@ -21,17 +22,46 @@ struct SettingsView: View {
                     }
                 }
 
-                Picker("Menu bar", selection: binding(\.displayMode)) {
-                    ForEach(DisplayMode.allCases) { mode in
-                        Text(mode.title).tag(mode)
-                    }
-                }
-
                 Picker("Order", selection: binding(\.reviewMode)) {
                     ForEach(ReviewMode.allCases) { mode in
                         Text(mode.title).tag(mode)
                     }
                 }
+            }
+
+            Section("Pronunciation") {
+                Picker("Accent", selection: binding(\.speechAccent)) {
+                    ForEach(SpeechAccent.allCases) { accent in
+                        Text(accent.title).tag(accent)
+                    }
+                }
+
+                HStack {
+                    Text("Speed")
+                    Slider(value: binding(\.speechRate), in: 0...1)
+                }
+
+                Toggle("Speak each new word automatically", isOn: binding(\.autoSpeak))
+
+                Text("Uses the built-in macOS voice — fully offline, no setup.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("Exam Word Books") {
+                Picker("Exam", selection: $selectedExam) {
+                    ForEach(ExamCategory.allCases) { exam in
+                        Text(exam.title).tag(exam)
+                    }
+                }
+
+                Button("Load this word book") {
+                    store.loadExamBook(selectedExam)
+                }
+
+                Text("Built-in offline 中英词典 (ECDICT). Loading replaces the current word book.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             Section("AI") {
@@ -53,7 +83,7 @@ struct SettingsView: View {
         }
         .formStyle(.grouped)
         .padding(20)
-        .frame(width: 460, height: 420)
+        .frame(width: 460, height: 540)
     }
 
     private func binding<Value>(_ keyPath: WritableKeyPath<AppSettings, Value>) -> Binding<Value> {

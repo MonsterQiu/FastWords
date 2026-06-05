@@ -7,7 +7,7 @@ final class SettingsWindowController: NSWindowController {
         let hostingController = NSHostingController(rootView: SettingsView(store: store))
         let window = NSWindow(contentViewController: hostingController)
         window.title = "FastWords Settings"
-        window.setContentSize(NSSize(width: 460, height: 420))
+        window.setContentSize(NSSize(width: 460, height: 540))
         window.styleMask = [.titled, .closable, .miniaturizable]
         window.isReleasedWhenClosed = false
         window.center()
