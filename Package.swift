@@ -12,7 +12,10 @@ let package = Package(
     ],
     targets: [
         .target(
-            name: "FastWordsCore"
+            name: "FastWordsCore",
+            resources: [
+                .copy("Resources/ecdict_exam.tsv")
+            ]
         ),
         .executableTarget(
             name: "FastWords",
