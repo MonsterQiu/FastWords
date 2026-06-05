@@ -62,4 +62,30 @@ final class SRSTests: XCTestCase {
     func testNewStateIsDueImmediately() {
         XCTAssertTrue(SRSState().isDue(asOf: now))
     }
+
+    func testNewWordIsNotMastered() {
+        XCTAssertEqual(SRS.masteryStatus(for: SRSState()), .learning)
+    }
+
+    func testBecomesMasteredAfterEnoughGoodReviews() {
+        var state = SRSState()
+        for _ in 0..<4 {
+            state = SRS.apply(.good, to: state, now: now)
+        }
+        // After 4 good reviews: repetitions=4, interval well past 21 days.
+        XCTAssertGreaterThanOrEqual(state.repetitions, SRS.masteryRepetitions)
+        XCTAssertGreaterThanOrEqual(state.intervalDays, SRS.masteryIntervalDays)
+        XCTAssertEqual(SRS.masteryStatus(for: state), .mastered)
+    }
+
+    func testLapseDropsBackToLearning() {
+        var state = SRSState()
+        for _ in 0..<5 {
+            state = SRS.apply(.good, to: state, now: now)
+        }
+        XCTAssertEqual(SRS.masteryStatus(for: state), .mastered)
+
+        let lapsed = SRS.apply(.again, to: state, now: now)
+        XCTAssertEqual(SRS.masteryStatus(for: lapsed), .learning, "forgetting a mastered word drops it back")
+    }
 }
