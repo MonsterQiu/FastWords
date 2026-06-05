@@ -41,6 +41,8 @@ public struct OfflineDictionaryEntry: Equatable, Sendable {
     public var word: String
     public var phonetic: String
     public var translation: String
+    /// English (English-to-English) definition, when available.
+    public var englishDefinition: String
     public var tags: Set<ExamCategory>
 }
 
@@ -78,7 +80,21 @@ public final class OfflineDictionary: DictionaryService, @unchecked Sendable {
         ensureLoaded()
 
         guard let entry = withLock({ byWord[key] }) else { throw DictionaryError.notFound }
-        return DictionaryResult(phonetic: entry.phonetic, meaning: entry.translation, example: "", audioURL: nil)
+        return DictionaryResult(
+            phonetic: entry.phonetic,
+            meaning: entry.translation,
+            englishDefinition: entry.englishDefinition,
+            example: "",
+            audioURL: nil
+        )
+    }
+
+    /// Synchronous entry lookup (case-insensitive). Returns nil if not found.
+    public func entry(for word: String) -> OfflineDictionaryEntry? {
+        let key = OfflineDictionary.normalize(word)
+        guard !key.isEmpty else { return nil }
+        ensureLoaded()
+        return withLock { byWord[key] }
     }
 
     // MARK: - Exam word books
@@ -92,7 +108,8 @@ public final class OfflineDictionary: DictionaryService, @unchecked Sendable {
                 word: entry.word,
                 phonetic: entry.phonetic,
                 phoneticUK: entry.phonetic, // ECDICT phonetics are UK-based
-                meaning: entry.translation
+                meaning: entry.translation,
+                englishDefinition: entry.englishDefinition
             )
         }
     }
@@ -156,16 +173,18 @@ public final class OfflineDictionary: DictionaryService, @unchecked Sendable {
     static func parse(_ text: String) -> [OfflineDictionaryEntry] {
         var result: [OfflineDictionaryEntry] = []
         for line in text.split(separator: "\n", omittingEmptySubsequences: true) {
-            let fields = line.split(separator: "\t", maxSplits: 3, omittingEmptySubsequences: false)
-            guard fields.count == 4 else { continue }
+            // Fields: word \t phonetic \t 中文 \t 英英 \t tag
+            let fields = line.split(separator: "\t", maxSplits: 4, omittingEmptySubsequences: false)
+            guard fields.count == 5 else { continue }
             let word = String(fields[0])
             guard !word.isEmpty else { continue }
-            let tags = Set(fields[3].split(separator: " ").compactMap { ExamCategory(rawValue: String($0)) })
+            let tags = Set(fields[4].split(separator: " ").compactMap { ExamCategory(rawValue: String($0)) })
             result.append(
                 OfflineDictionaryEntry(
                     word: word,
                     phonetic: String(fields[1]),
                     translation: String(fields[2]),
+                    englishDefinition: String(fields[3]),
                     tags: tags
                 )
             )

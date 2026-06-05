@@ -294,6 +294,47 @@ final class WordStore: ObservableObject {
         importMessage = message
     }
 
+    /// Fill in blank fields (English definition, Chinese meaning, phonetic) for
+    /// every word in the current book from the bundled offline dictionary.
+    /// Useful for books loaded before a field existed (e.g. English definitions).
+    @discardableResult
+    func enrichCurrentBookFromOffline() -> Int {
+        guard let bookIndex = currentBookIndex else { return 0 }
+        let dict = OfflineDictionary.shared
+        var enriched = 0
+
+        for i in books[bookIndex].words.indices {
+            var word = books[bookIndex].words[i]
+            let needsSomething = word.englishDefinition.isEmpty || word.meaning.isEmpty || word.phonetic.isEmpty
+            guard needsSomething, let entry = dict.entry(for: word.word) else { continue }
+
+            var changed = false
+            if word.englishDefinition.isEmpty, !entry.englishDefinition.isEmpty {
+                word.englishDefinition = entry.englishDefinition; changed = true
+            }
+            if word.meaning.isEmpty, !entry.translation.isEmpty {
+                word.meaning = entry.translation; changed = true
+            }
+            if word.phonetic.isEmpty, !entry.phonetic.isEmpty {
+                word.phonetic = entry.phonetic
+                if word.phoneticUK.isEmpty { word.phoneticUK = entry.phonetic }
+                changed = true
+            }
+            if changed {
+                books[bookIndex].words[i] = word
+                enriched += 1
+            }
+        }
+
+        if enriched > 0 {
+            importMessage = "已为《\(books[bookIndex].name)》补全 \(enriched) 个单词的释义。"
+            save()
+        } else {
+            importMessage = "本词书无需补全。"
+        }
+        return enriched
+    }
+
     func restoreSamples() {
         let sampleWords = [
             WordEntry(
@@ -367,6 +408,10 @@ final class WordStore: ObservableObject {
             words[currentIndex].meaning = result.meaning
             filled.append("meaning")
         }
+        if words[currentIndex].englishDefinition.isEmpty, !result.englishDefinition.isEmpty {
+            words[currentIndex].englishDefinition = result.englishDefinition
+            filled.append("english")
+        }
         if words[currentIndex].example.isEmpty, !result.example.isEmpty {
             words[currentIndex].example = result.example
             filled.append("example")
@@ -383,6 +428,7 @@ final class WordStore: ObservableObject {
                 switch field {
                 case "phonetic": return "音标"
                 case "meaning": return "释义"
+                case "english": return "英英释义"
                 case "example": return "例句"
                 default: return field
                 }

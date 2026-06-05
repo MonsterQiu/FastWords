@@ -12,6 +12,12 @@ final class OfflineDictionaryDataTests: XCTestCase {
                       "meaning should contain Chinese characters: \(result.meaning)")
     }
 
+    func testBundledDictionaryHasEnglishDefinition() async throws {
+        let dict = OfflineDictionary()
+        let result = try await dict.lookup("abandon")
+        XCTAssertFalse(result.englishDefinition.isEmpty, "abandon should have an English definition")
+    }
+
     func testExamBooksAreNonEmpty() {
         let dict = OfflineDictionary()
         for exam in ExamCategory.allCases {
