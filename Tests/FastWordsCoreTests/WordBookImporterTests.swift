@@ -17,6 +17,18 @@ final class WordBookImporterTests: XCTestCase {
         XCTAssertEqual(entries[1].word, "brisk")
     }
 
+    func testImportsTwoColumnPlainTextAsWordAndMeaning() throws {
+        let entries = try WordBookImporter.importTXT("""
+        abandon\t放弃
+        brisk\t轻快的
+        """)
+
+        XCTAssertEqual(entries[0].word, "abandon")
+        XCTAssertEqual(entries[0].phonetic, "")
+        XCTAssertEqual(entries[0].meaning, "放弃")
+        XCTAssertEqual(entries[1].meaning, "轻快的")
+    }
+
     func testImportsCSVWithHeaderAndQuotedComma() throws {
         let entries = try WordBookImporter.importCSV("""
         word,phonetic,meaning,example
