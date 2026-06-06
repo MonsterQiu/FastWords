@@ -6,3 +6,9 @@ DerivedData/
 *.xcodeproj/project.xcworkspace/xcuserdata/
 *.xcodeproj/xcuserdata/
 *.swiftpm/
+
+# Logo intermediate artifacts — keep only the generator scripts + final .icns.
+logo/*.png
+logo/*.svg
+logo/AppIcon.iconset/
+logo/AppIcon.icns
