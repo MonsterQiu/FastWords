@@ -17,6 +17,13 @@ mkdir -p "$MACOS_DIR"
 
 cp "$ROOT_DIR/.build/release/$APP_NAME" "$MACOS_DIR/$APP_NAME"
 
+# App icon: copy the .icns into Resources/ and reference it from Info.plist.
+RESOURCES_DIR="$CONTENTS_DIR/Resources"
+mkdir -p "$RESOURCES_DIR"
+if [ -f "$ROOT_DIR/Resources/AppIcon.icns" ]; then
+  cp "$ROOT_DIR/Resources/AppIcon.icns" "$RESOURCES_DIR/AppIcon.icns"
+fi
+
 # Copy SPM-generated resource bundles (e.g. the bundled ECDICT dictionary) next
 # to the executable, where Bundle.module expects to find them.
 for bundle in "$ROOT_DIR"/.build/release/*.bundle; do
@@ -37,6 +44,8 @@ cat > "$CONTENTS_DIR/Info.plist" <<PLIST
   <string>$APP_NAME</string>
   <key>CFBundleDisplayName</key>
   <string>$APP_NAME</string>
+  <key>CFBundleIconFile</key>
+  <string>AppIcon</string>
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>
