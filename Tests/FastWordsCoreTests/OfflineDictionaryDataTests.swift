@@ -32,4 +32,16 @@ final class OfflineDictionaryDataTests: XCTestCase {
         XCTAssertGreaterThan(dict.words(for: .gre).count, 5000)
         XCTAssertGreaterThan(dict.words(for: .cet4).count, 3000)
     }
+
+    /// The bundle is sorted by corpus frequency (basic top-1000 words pushed to
+    /// the back), so a high-frequency exam word should appear before a rarer one.
+    func testWordBookIsFrequencyOrdered() {
+        let words = OfflineDictionary().words(for: .ielts).map { $0.word.lowercased() }
+        guard let iHotel = words.firstIndex(of: "hotel"),
+              let iAbolish = words.firstIndex(of: "abolish") else {
+            return XCTFail("expected both words present in the IELTS book")
+        }
+        // "hotel" is far more frequent than "abolish", so it must come earlier.
+        XCTAssertLessThan(iHotel, iAbolish, "more frequent words should come first")
+    }
 }
