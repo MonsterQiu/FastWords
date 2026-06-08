@@ -144,10 +144,19 @@ final class WordStore: ObservableObject {
         }
     }
 
-    /// Total distinct mastered words across all books (no double-counting words
-    /// shared between books).
+    /// Total distinct mastered words across the current books (no double-counting
+    /// words shared between books). Counts only words still present in some book,
+    /// so progress orphaned by a deleted book doesn't inflate the total.
     var totalMasteredCount: Int {
-        wordProgress.values.filter { $0.status == .mastered }.count
+        var keys = Set<String>()
+        for book in books {
+            for entry in book.words {
+                let key = progressKey(entry.word)
+                if keys.contains(key) { continue }
+                if wordProgress[key]?.status == .mastered { keys.insert(key) }
+            }
+        }
+        return keys.count
     }
 
     // MARK: - Book management
