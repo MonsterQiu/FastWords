@@ -11,10 +11,19 @@ final class WordStore: ObservableObject {
         var settings: AppSettings
         /// Daily review counts (yyyy-MM-dd → grade taps that day).
         var reviewLog: [String: Int]?
+        /// Global per-word learning progress, keyed by lowercased word, shared
+        /// across every book (you study a *word*, not a book-specific copy).
+        var wordProgress: [String: WordProgress]?
 
         // Legacy single-book fields (pre-multi-book). Decoded for migration.
         var words: [WordEntry]?
         var currentIndex: Int?
+    }
+
+    /// A word's learning state, shared across all books that contain it.
+    struct WordProgress: Codable, Equatable {
+        var fsrs: FSRSState
+        var status: WordStatus
     }
 
     enum AIState: Equatable {
@@ -33,6 +42,9 @@ final class WordStore: ObservableObject {
     @Published private(set) var currentBookID: UUID?
     /// Daily review counts for the stats heatmap (yyyy-MM-dd → count).
     @Published private(set) var reviewLog: [String: Int] = [:]
+    /// Global per-word progress (key = lowercased word). The single source of
+    /// truth for FSRS state & mastery, shared across every book.
+    @Published private(set) var wordProgress: [String: WordProgress] = [:]
     @Published var settings = AppSettings() {
         didSet { if !isLoading { save() } }
     }
@@ -60,6 +72,22 @@ final class WordStore: ObservableObject {
 
     // MARK: - Current book access
 
+    /// Lowercased lookup key for global per-word progress.
+    private func progressKey(_ word: String) -> String {
+        word.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+
+    /// Overlay the shared global progress onto a book entry so the rest of the
+    /// app reads each word's *shared* FSRS state & mastery, not the stale copy
+    /// stored inside the book.
+    private func withProgress(_ entry: WordEntry) -> WordEntry {
+        guard let p = wordProgress[progressKey(entry.word)] else { return entry }
+        var e = entry
+        e.fsrs = p.fsrs
+        e.status = p.status
+        return e
+    }
+
     private var currentBookIndex: Int? {
         guard let id = currentBookID else { return nil }
         return books.firstIndex { $0.id == id }
@@ -70,10 +98,11 @@ final class WordStore: ObservableObject {
         return books[index]
     }
 
-    /// Words of the current book. Reads/writes proxy into the book array so the
-    /// existing word-mutation methods continue to work unchanged.
+    /// Words of the current book, each carrying the shared global progress.
+    /// Writes to text fields (meaning/phonetic/etc.) still proxy into the book;
+    /// progress fields (fsrs/status) are owned by the global table.
     private(set) var words: [WordEntry] {
-        get { currentBook?.words ?? [] }
+        get { (currentBook?.words ?? []).map(withProgress) }
         set {
             guard let index = currentBookIndex else { return }
             books[index].words = newValue
@@ -105,6 +134,20 @@ final class WordStore: ObservableObject {
     var progressValue: Double {
         guard !words.isEmpty else { return 0 }
         return Double(masteredCount) / Double(words.count)
+    }
+
+    /// Number of mastered words in a book, counted against the shared global
+    /// progress table (so a word mastered in another book counts here too).
+    func masteredCount(in book: WordBook) -> Int {
+        book.words.reduce(0) { count, entry in
+            wordProgress[progressKey(entry.word)]?.status == .mastered ? count + 1 : count
+        }
+    }
+
+    /// Total distinct mastered words across all books (no double-counting words
+    /// shared between books).
+    var totalMasteredCount: Int {
+        wordProgress.values.filter { $0.status == .mastered }.count
     }
 
     // MARK: - Book management
@@ -147,6 +190,7 @@ final class WordStore: ObservableObject {
             let decoded = try JSONDecoder.fastWords.decode(PersistedState.self, from: data)
             settings = decoded.settings
             reviewLog = decoded.reviewLog ?? [:]
+            wordProgress = decoded.wordProgress ?? [:]
 
             if let savedBooks = decoded.books, !savedBooks.isEmpty {
                 books = savedBooks
@@ -164,6 +208,14 @@ final class WordStore: ObservableObject {
             } else {
                 restoreSamples()
                 return
+            }
+
+            // Migrate per-book progress into the shared global table when this
+            // state predates global progress (no wordProgress key). Keeps the
+            // most-reviewed copy if a word appears in several books — so your
+            // existing progress is preserved, not reset.
+            if decoded.wordProgress == nil {
+                migrateBookProgressIntoGlobal()
             }
 
             clampCurrentIndex()
@@ -193,6 +245,7 @@ final class WordStore: ObservableObject {
                 currentBookID: currentBookID,
                 settings: settings,
                 reviewLog: reviewLog,
+                wordProgress: wordProgress,
                 words: nil,
                 currentIndex: nil
             )
@@ -203,10 +256,26 @@ final class WordStore: ObservableObject {
         }
     }
 
+    /// Harvest any per-book FSRS/status that's been reviewed into the global
+    /// progress table. When a word appears in multiple books, keep the most-
+    /// reviewed copy. Used to migrate pre-global-progress saved state.
+    private func migrateBookProgressIntoGlobal() {
+        for book in books {
+            for entry in book.words {
+                guard entry.fsrs.reps > 0 || entry.status == .mastered else { continue }
+                let key = progressKey(entry.word)
+                if let existing = wordProgress[key], existing.fsrs.reps >= entry.fsrs.reps {
+                    continue // keep the more-reviewed copy
+                }
+                wordProgress[key] = WordProgress(fsrs: entry.fsrs, status: entry.status)
+            }
+        }
+    }
+
     private func clampCurrentIndex() {
-        guard let index = currentBookIndex else { return }
-        let count = books[index].words.count
-        books[index].currentIndex = max(0, min(books[index].currentIndex, max(count - 1, 0)))
+        guard let bookIndex = currentBookIndex else { return }
+        let count = books[bookIndex].words.count
+        books[bookIndex].currentIndex = max(0, min(books[bookIndex].currentIndex, max(count - 1, 0)))
     }
 
     func showNext() {
@@ -227,32 +296,26 @@ final class WordStore: ObservableObject {
     }
 
     /// Record how well the current word was recalled, update its FSRS schedule
-    /// and mastery status, then advance to the next word.
+    /// and mastery status (in the shared global table), then advance.
     func grade(_ grade: ReviewGrade) {
-        guard words.indices.contains(currentIndex) else { return }
+        guard let word = currentWord else { return }
         let now = Date()
-        words[currentIndex].fsrs = FSRS.review(
-            words[currentIndex].fsrs,
-            grade: grade,
-            now: now,
-            desiredRetention: settings.desiredRetention
-        )
-        // Mastery is a consequence of the FSRS schedule: once memory stability is
-        // high enough the word is mastered; a lapse lowers stability and drops it
-        // back to learning.
-        words[currentIndex].status = FSRS.masteryStatus(for: words[currentIndex].fsrs)
-        words[currentIndex].updatedAt = now
+        let key = progressKey(word.word)
+        let current = wordProgress[key]?.fsrs ?? word.fsrs
+        let updated = FSRS.review(current, grade: grade, now: now, desiredRetention: settings.desiredRetention)
+        // Mastery follows the FSRS schedule; shared across all books with this word.
+        wordProgress[key] = WordProgress(fsrs: updated, status: FSRS.masteryStatus(for: updated))
         // Record one review for today's heatmap.
-        let key = ReviewStats.dayKey(for: now)
-        reviewLog[key, default: 0] += 1
-        showNext()
+        reviewLog[ReviewStats.dayKey(for: now), default: 0] += 1
+        showNext() // showNext() saves
     }
 
     func toggleMastered() {
-        guard words.indices.contains(currentIndex) else { return }
-        let nextStatus: WordStatus = words[currentIndex].status == .mastered ? .learning : .mastered
-        words[currentIndex].status = nextStatus
-        words[currentIndex].updatedAt = Date()
+        guard let word = currentWord else { return }
+        let key = progressKey(word.word)
+        let p = wordProgress[key] ?? WordProgress(fsrs: word.fsrs, status: word.status)
+        let nextStatus: WordStatus = p.status == .mastered ? .learning : .mastered
+        wordProgress[key] = WordProgress(fsrs: p.fsrs, status: nextStatus)
         save()
     }
 
@@ -280,27 +343,32 @@ final class WordStore: ObservableObject {
         save()
     }
 
-    /// Load a built-in exam word book (考研/托福/雅思/…). If a book for this
-    /// category already exists, switch to it (preserving progress) instead of
-    /// recreating it.
+    /// Load a built-in exam word book (考研/托福/雅思/…). If the book already
+    /// exists, refresh its word list & order from the current dictionary
+    /// (e.g. to pick up frequency ordering) — progress is global, so this is
+    /// lossless — and switch to it. Otherwise create it.
     func loadExamBook(_ category: ExamCategory) {
-        if let existing = books.first(where: { $0.source == .exam(category) }) {
-            selectBook(existing.id)
-            importMessage = "已切换到《\(category.title)》。"
-            return
-        }
-
         let entries = OfflineDictionary.shared.words(for: category)
         guard !entries.isEmpty else {
             importMessage = "未找到 \(category.title) 词库。"
             return
         }
-        let book = WordBook(name: category.title, source: .exam(category), words: entries)
-        books.append(book)
-        currentBookID = book.id
+
+        if let index = books.firstIndex(where: { $0.source == .exam(category) }) {
+            // Re-sync words/order from the latest dictionary; progress lives in
+            // the shared global table, so refreshing the list loses nothing.
+            books[index].words = entries
+            books[index].currentIndex = 0
+            currentBookID = books[index].id
+            importMessage = "已更新《\(category.title)》词序（进度已保留）。"
+        } else {
+            let book = WordBook(name: category.title, source: .exam(category), words: entries)
+            books.append(book)
+            currentBookID = book.id
+            importMessage = "已加载《\(category.title)》：\(entries.count) 个单词。"
+        }
         aiState = .idle
         lookupState = .idle
-        importMessage = "已加载《\(category.title)》：\(entries.count) 个单词。"
         save()
     }
 

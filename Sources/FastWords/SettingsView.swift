@@ -239,7 +239,7 @@ struct SettingsView: View {
                 }
 
                 if let loaded {
-                    Text("\(loaded.words.count) 词 · \(loaded.masteredCount) 已掌握")
+                    Text("\(loaded.words.count) 词 · \(store.masteredCount(in: loaded)) 已掌握")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     Label(isCurrent ? "使用中" : "点击切换",
@@ -280,7 +280,7 @@ struct SettingsView: View {
                 Spacer()
                 if isCurrent { Image(systemName: "checkmark.circle.fill").foregroundStyle(.blue) }
             }
-            Text("\(book.words.count) 词 · \(book.masteredCount) 已掌握")
+            Text("\(book.words.count) 词 · \(store.masteredCount(in: book)) 已掌握")
                 .font(.caption)
                 .foregroundStyle(.secondary)
             HStack(spacing: 12) {

@@ -47,7 +47,7 @@ struct StatsView: View {
         let today = counts[ReviewStats.dayKey(for: now)] ?? 0
         let total = ReviewStats.total(counts: counts)
         let streak = ReviewStats.currentStreak(counts: counts, asOf: now)
-        let mastered = store.books.reduce(0) { $0 + $1.masteredCount }
+        let mastered = store.totalMasteredCount
 
         return HStack(spacing: 12) {
             statCard("今日学习", "\(today)", "flame")
