@@ -4,6 +4,7 @@ import SwiftUI
 struct MenuBarPopoverView: View {
     @ObservedObject var store: WordStore
     let actions: AppActions
+    @State private var revealedDefinitionWordID: UUID?
 
     var body: some View {
         ZStack {
@@ -55,6 +56,9 @@ struct MenuBarPopoverView: View {
         }
         .frame(width: 360, height: 540)
         .tint(Theme.accent)
+        .onChange(of: store.currentWord?.id) { _, _ in
+            revealedDefinitionWordID = nil
+        }
     }
 
     // MARK: - Header
@@ -143,17 +147,18 @@ struct MenuBarPopoverView: View {
 
     private func wordDetail(_ entry: WordEntry) -> some View {
         let settings = store.settings
+        let definitionsRevealed = revealedDefinitionWordID == entry.id
         return VStack(alignment: .leading, spacing: 12) {
             if settings.showShortcutHint {
                 shortcutHint
             }
 
             if settings.showChinese {
-                meaningBlock(entry)
+                meaningBlock(entry, isRevealed: definitionsRevealed)
             }
 
             if settings.showEnglish, !entry.englishDefinition.isEmpty {
-                englishBlock(entry)
+                englishBlock(entry, isRevealed: definitionsRevealed)
             }
 
             if settings.showExample, !entry.example.isEmpty {
@@ -167,23 +172,25 @@ struct MenuBarPopoverView: View {
     }
 
     /// English (English-to-English) definition block.
-    private func englishBlock(_ entry: WordEntry) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("英英释义")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(Theme.inkSoft)
-            Text(entry.englishDefinition)
-                .font(.maple(14))
-                .foregroundStyle(Theme.ink)
-                .fixedSize(horizontal: false, vertical: true)
+    private func englishBlock(_ entry: WordEntry, isRevealed: Bool) -> some View {
+        revealableDefinitionCard(entry: entry, isRevealed: isRevealed) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("英英释义")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Theme.inkSoft)
+                Text(entry.englishDefinition)
+                    .font(.maple(14))
+                    .foregroundStyle(Theme.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(14)
+            .background(Theme.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(Theme.stroke.opacity(0.6), lineWidth: 1)
+            )
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(14)
-        .background(Theme.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(Theme.stroke.opacity(0.6), lineWidth: 1)
-        )
     }
 
     /// US + UK phonetics, stacked vertically (one per line) so even long
@@ -251,27 +258,64 @@ struct MenuBarPopoverView: View {
         .background(Theme.surface, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
-    private func meaningBlock(_ entry: WordEntry) -> some View {
+    private func meaningBlock(_ entry: WordEntry, isRevealed: Bool) -> some View {
         let (pos, body) = MeaningFormatter.splitPartOfSpeech(entry.meaning)
-        return HStack(alignment: .firstTextBaseline, spacing: 10) {
-            if let pos {
-                Text(pos)
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
-                    .foregroundStyle(Theme.accent)
+        return revealableDefinitionCard(entry: entry, isRevealed: isRevealed || body.isEmpty) {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                if let pos {
+                    Text(pos)
+                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                        .foregroundStyle(Theme.accent)
+                }
+                Text(body.isEmpty ? "暂无释义，点击 Dictionary 查询。" : body)
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(Theme.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
             }
-            Text(body.isEmpty ? "暂无释义，点击 Dictionary 查询。" : body)
-                .font(.system(size: 16, weight: .medium))
-                .foregroundStyle(Theme.ink)
-                .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 0)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(14)
+            .background(Theme.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(Theme.stroke.opacity(0.6), lineWidth: 1)
+            )
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(14)
-        .background(Theme.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(Theme.stroke.opacity(0.6), lineWidth: 1)
-        )
+    }
+
+    private func revealableDefinitionCard<Content: View>(
+        entry: WordEntry,
+        isRevealed: Bool,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        Button {
+            withAnimation(.easeOut(duration: 0.16)) {
+                revealedDefinitionWordID = entry.id
+            }
+        } label: {
+            content()
+                .blur(radius: isRevealed ? 0 : 8)
+                .opacity(isRevealed ? 1 : 0.38)
+                .overlay {
+                    if !isRevealed {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(.ultraThinMaterial)
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(Color.primary.opacity(0.035))
+                            Image(systemName: "eye.fill")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(Theme.inkSoft)
+                                .padding(10)
+                                .background(.regularMaterial, in: Circle())
+                        }
+                        .transition(.opacity)
+                    }
+                }
+                .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .help(isRevealed ? "释义已显示" : "显示释义")
     }
 
     private func exampleBlock(_ entry: WordEntry) -> some View {
