@@ -463,6 +463,7 @@ struct MenuBarPopoverView: View {
             iconLink("sparkles", "AI 提示", action: actions.generateAIInsight)
                 .disabled(!store.settings.aiEnabled || store.aiState == .loading)
             Spacer()
+            iconLink("door.left.hand.open", "退出", action: actions.quit)
             iconLink("gearshape", "设置", action: actions.openSettings)
         }
         .font(.system(size: 12))
