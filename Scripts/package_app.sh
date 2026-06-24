@@ -24,11 +24,14 @@ if [ -f "$ROOT_DIR/Resources/AppIcon.icns" ]; then
   cp "$ROOT_DIR/Resources/AppIcon.icns" "$RESOURCES_DIR/AppIcon.icns"
 fi
 
-# Copy SPM-generated resource bundles (e.g. the bundled ECDICT dictionary) next
-# to the executable, where Bundle.module expects to find them.
+# Copy SPM-generated resource bundles (ECDICT dictionary, Maple fonts) to the
+# .app bundle ROOT — next to Contents/, NOT inside Resources/ or MacOS/. The
+# SwiftPM `Bundle.module` accessor resolves them via `Bundle.main.bundleURL`,
+# which for an .app is the bundle root; putting them anywhere else makes the
+# app fall back to an absolute build-dir path that breaks once moved/renamed.
 for bundle in "$ROOT_DIR"/.build/release/*.bundle; do
   [ -e "$bundle" ] || continue
-  cp -R "$bundle" "$MACOS_DIR/"
+  cp -R "$bundle" "$APP_DIR/"
 done
 
 cat > "$CONTENTS_DIR/Info.plist" <<PLIST
