@@ -59,6 +59,20 @@ struct MenuBarPopoverView: View {
         .onChange(of: store.currentWord?.id) { _, _ in
             revealedDefinitionWordID = nil
         }
+        // Auto-reveal the meaning if the user lingers on a word for 10s. The
+        // task is keyed to the word id, so switching words cancels and restarts
+        // the countdown; a manual reveal earlier just makes this set a no-op.
+        .task(id: store.currentWord?.id) {
+            guard let id = store.currentWord?.id else { return }
+            do {
+                try await Task.sleep(for: .seconds(10))
+            } catch {
+                return  // cancelled — word changed or popover closed
+            }
+            withAnimation(.easeOut(duration: 0.3)) {
+                revealedDefinitionWordID = id
+            }
+        }
     }
 
     // MARK: - Header
@@ -147,18 +161,18 @@ struct MenuBarPopoverView: View {
 
     private func wordDetail(_ entry: WordEntry) -> some View {
         let settings = store.settings
-        let definitionsRevealed = revealedDefinitionWordID == entry.id
+        let meaningRevealed = revealedDefinitionWordID == entry.id
         return VStack(alignment: .leading, spacing: 12) {
             if settings.showShortcutHint {
                 shortcutHint
             }
 
             if settings.showChinese {
-                meaningBlock(entry, isRevealed: definitionsRevealed)
+                meaningBlock(entry, isRevealed: meaningRevealed)
             }
 
             if settings.showEnglish, !entry.englishDefinition.isEmpty {
-                englishBlock(entry, isRevealed: definitionsRevealed)
+                englishBlock(entry)
             }
 
             if settings.showExample, !entry.example.isEmpty {
@@ -171,26 +185,24 @@ struct MenuBarPopoverView: View {
         }
     }
 
-    /// English (English-to-English) definition block.
-    private func englishBlock(_ entry: WordEntry, isRevealed: Bool) -> some View {
-        revealableDefinitionCard(entry: entry, isRevealed: isRevealed) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("英英释义")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(Theme.inkSoft)
-                Text(entry.englishDefinition)
-                    .font(.maple(14))
-                    .foregroundStyle(Theme.ink)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(14)
-            .background(Theme.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(Theme.stroke.opacity(0.6), lineWidth: 1)
-            )
+    /// English (English-to-English) definition — always visible, never masked.
+    private func englishBlock(_ entry: WordEntry) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("英英释义")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(Theme.inkSoft)
+            Text(entry.englishDefinition)
+                .font(.maple(14))
+                .foregroundStyle(Theme.ink)
+                .fixedSize(horizontal: false, vertical: true)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(Theme.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(Theme.stroke.opacity(0.6), lineWidth: 1)
+        )
     }
 
     /// US + UK phonetics, stacked vertically (one per line) so even long
@@ -260,7 +272,7 @@ struct MenuBarPopoverView: View {
 
     private func meaningBlock(_ entry: WordEntry, isRevealed: Bool) -> some View {
         let (pos, body) = MeaningFormatter.splitPartOfSpeech(entry.meaning)
-        return revealableDefinitionCard(entry: entry, isRevealed: isRevealed || body.isEmpty) {
+        return glassMeaningCard(entry: entry, isRevealed: isRevealed || body.isEmpty) {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 if let pos {
                     Text(pos)
@@ -283,39 +295,60 @@ struct MenuBarPopoverView: View {
         }
     }
 
-    private func revealableDefinitionCard<Content: View>(
+    /// Wraps the Chinese meaning behind a frosted-glass pane. Until tapped, the
+    /// characters shimmer faintly through the glass (若隐若现) rather than being
+    /// fully hidden; a tap clears the glass with a soft fade.
+    private func glassMeaningCard<Content: View>(
         entry: WordEntry,
         isRevealed: Bool,
         @ViewBuilder content: () -> Content
     ) -> some View {
-        Button {
-            withAnimation(.easeOut(duration: 0.16)) {
+        let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
+        return Button {
+            withAnimation(.easeOut(duration: 0.3)) {
                 revealedDefinitionWordID = entry.id
             }
         } label: {
             content()
-                .blur(radius: isRevealed ? 0 : 8)
-                .opacity(isRevealed ? 1 : 0.38)
+                // Light Gaussian on the glyphs: shapes glimmer, words don't read.
+                .blur(radius: isRevealed ? 0 : 4.5)
+                .clipShape(shape)
                 .overlay {
                     if !isRevealed {
-                        ZStack {
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .fill(.ultraThinMaterial)
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .fill(Color.primary.opacity(0.035))
-                            Image(systemName: "eye.fill")
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundStyle(Theme.inkSoft)
-                                .padding(10)
-                                .background(.regularMaterial, in: Circle())
-                        }
-                        .transition(.opacity)
+                        frostedVeil(shape).transition(.opacity)
                     }
                 }
-                .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .contentShape(shape)
         }
         .buttonStyle(.plain)
-        .help(isRevealed ? "释义已显示" : "显示释义")
+        .help(isRevealed ? "释义已显示" : "点击显示释义")
+    }
+
+    /// A translucent frosted pane that lets the blurred meaning glimmer through,
+    /// finished with a diagonal specular sheen, a faint azure tint, and a bright
+    /// rim so it reads as a real pane of glass.
+    private func frostedVeil(_ shape: RoundedRectangle) -> some View {
+        ZStack {
+            shape.fill(.ultraThinMaterial).opacity(0.5)
+            shape.fill(Theme.accent.opacity(0.06))
+            shape.fill(
+                LinearGradient(
+                    colors: [.white.opacity(0.18), .clear, .white.opacity(0.05)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+        }
+        .overlay(
+            shape.stroke(
+                LinearGradient(
+                    colors: [.white.opacity(0.35), .white.opacity(0.05)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                ),
+                lineWidth: 1
+            )
+        )
     }
 
     private func exampleBlock(_ entry: WordEntry) -> some View {
