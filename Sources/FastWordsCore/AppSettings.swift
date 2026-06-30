@@ -79,7 +79,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         autoSpeak: Bool = false,
         desiredRetention: Double = 0.9,
         showChinese: Bool = true,
-        showEnglish: Bool = false,
+        showEnglish: Bool = true,
         showPhonetic: Bool = true,
         showExample: Bool = true,
         showAIHint: Bool = true,

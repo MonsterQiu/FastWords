@@ -55,11 +55,17 @@ public struct FreeDictionaryService: DictionaryService {
 
         let encoded = trimmed.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? trimmed
         let url = baseURL.appendingPathComponent(encoded)
+        var request = URLRequest(url: url)
+        // Some edge/CDN configurations reject generic client user agents. A
+        // clear app user-agent keeps the key-less public API reachable while
+        // still using only documented HTTP behavior.
+        request.setValue("FastWords/1.0 (macOS; https://github.com/)", forHTTPHeaderField: "User-Agent")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
 
         let data: Data
         let response: URLResponse
         do {
-            (data, response) = try await session.data(from: url)
+            (data, response) = try await session.data(for: request)
         } catch {
             throw DictionaryError.network(error.localizedDescription)
         }

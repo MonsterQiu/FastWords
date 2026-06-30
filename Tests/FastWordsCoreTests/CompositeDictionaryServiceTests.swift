@@ -11,12 +11,22 @@ final class CompositeDictionaryServiceTests: XCTestCase {
         }
     }
 
-    func testReturnsFirstSuccessfulResult() async throws {
-        let offline = StubService(result: DictionaryResult(meaning: "放弃"))
-        let online = StubService(result: DictionaryResult(meaning: "should not reach"))
+    func testMergesResultsKeepingEarlierFields() async throws {
+        let offline = StubService(result: DictionaryResult(phonetic: "/old/", meaning: "放弃"))
+        let online = StubService(result: DictionaryResult(
+            phonetic: "/new/",
+            meaning: "should not overwrite Chinese",
+            englishDefinition: "To give up completely.",
+            example: "Do not abandon hope.",
+            audioURL: URL(string: "https://e/abandon.mp3")
+        ))
         let composite = CompositeDictionaryService([offline, online])
         let result = try await composite.lookup("abandon")
+        XCTAssertEqual(result.phonetic, "/old/")
         XCTAssertEqual(result.meaning, "放弃")
+        XCTAssertEqual(result.englishDefinition, "To give up completely.")
+        XCTAssertEqual(result.example, "Do not abandon hope.")
+        XCTAssertEqual(result.audioURL?.absoluteString, "https://e/abandon.mp3")
     }
 
     func testFallsThroughWhenFirstHasNoContent() async throws {

@@ -5,6 +5,9 @@ import FastWordsCore
 @MainActor
 final class WordStore: ObservableObject {
     struct PersistedState: Codable {
+        // Increment when persisted settings/data need a one-time migration.
+        var schemaVersion: Int?
+
         // New multi-book shape.
         var books: [WordBook]?
         var currentBookID: UUID?
@@ -51,6 +54,13 @@ final class WordStore: ObservableObject {
     @Published private(set) var aiState: AIState = .idle
     @Published private(set) var lookupState: LookupState = .idle
     @Published private(set) var importMessage: String?
+
+    /// Persisted-state schema written by this build.
+    private static let currentSchemaVersion = 2
+
+    /// Version where all card content blocks became enabled by default for
+    /// existing installs too. Missing version means pre-migration state.
+    private static let allContentEnabledSchemaVersion = 2
 
     /// Suppresses the `settings` didSet auto-save while `load()` is populating
     /// state, so a half-loaded store is never persisted (which previously wiped
@@ -198,6 +208,7 @@ final class WordStore: ObservableObject {
             let data = try Data(contentsOf: stateURL)
             let decoded = try JSONDecoder.fastWords.decode(PersistedState.self, from: data)
             settings = decoded.settings
+            migrateSettingsIfNeeded(from: decoded.schemaVersion)
             reviewLog = decoded.reviewLog ?? [:]
             wordProgress = decoded.wordProgress ?? [:]
 
@@ -242,6 +253,22 @@ final class WordStore: ObservableObject {
         }
     }
 
+
+    /// One-time settings migrations for existing users. In schema v2 we made
+    /// FastWords show all card content out of the box, including users who had
+    /// a pre-v2 state file where newly-added toggles decoded to older defaults.
+    private func migrateSettingsIfNeeded(from schemaVersion: Int?) {
+        let version = schemaVersion ?? 0
+        guard version < Self.allContentEnabledSchemaVersion else { return }
+
+        settings.showChinese = true
+        settings.showEnglish = true
+        settings.showPhonetic = true
+        settings.showExample = true
+        settings.showAIHint = true
+        settings.showShortcutHint = true
+    }
+
     func save() {
         do {
             try FileManager.default.createDirectory(
@@ -250,6 +277,7 @@ final class WordStore: ObservableObject {
             )
 
             let state = PersistedState(
+                schemaVersion: Self.currentSchemaVersion,
                 books: books,
                 currentBookID: currentBookID,
                 settings: settings,
@@ -432,18 +460,21 @@ final class WordStore: ObservableObject {
                 word: "abandon",
                 phonetic: "/əˈbændən/",
                 meaning: "放弃；抛弃",
+                englishDefinition: "To leave behind or give up completely.",
                 example: "Do not abandon the tiny habit after one hard day."
             ),
             WordEntry(
                 word: "brisk",
                 phonetic: "/brɪsk/",
                 meaning: "轻快的；生气勃勃的",
+                englishDefinition: "Quick, energetic, and active.",
                 example: "A brisk walk can wake up a sleepy brain."
             ),
             WordEntry(
                 word: "clarity",
                 phonetic: "/ˈklærəti/",
                 meaning: "清晰；明确",
+                englishDefinition: "The quality of being clear and easy to understand.",
                 example: "Clarity arrives when the sentence stops showing off."
             )
         ]

@@ -22,7 +22,8 @@ let package = Package(
             dependencies: ["FastWordsCore"],
             resources: [
                 .copy("Fonts/MapleMono-Regular.ttf"),
-                .copy("Fonts/MapleMono-Bold.ttf")
+                .copy("Fonts/MapleMono-Bold.ttf"),
+                .copy("Fonts/MapleMono-LICENSE.txt")
             ]
         ),
         .testTarget(
