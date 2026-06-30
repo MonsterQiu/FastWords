@@ -31,4 +31,16 @@ ditto -c -k --sequesterRsrc --keepParent "$APP_DIR" "$ZIP_PATH"
 echo "Release archive: $ZIP_PATH"
 ls -lh "$ZIP_PATH" | awk '{print "Size: "$5}'
 echo
-echo "Next: gh release create $TAG \"$ZIP_PATH\" --title \"FastWords $TAG\" --notes-file <notes>"
+
+if [[ "$PUBLISH" -eq 1 ]]; then
+  NOTES_FILE="$DIST_DIR/release-notes-$TAG.md"
+  "$ROOT_DIR/Scripts/generate_release_notes.sh" > "$NOTES_FILE"
+  if gh release view "$TAG" >/dev/null 2>&1; then
+    gh release edit "$TAG" --title "FastWords $TAG" --notes-file "$NOTES_FILE" "$ZIP_PATH"
+  else
+    gh release create "$TAG" "$ZIP_PATH" --title "FastWords $TAG" --notes-file "$NOTES_FILE"
+  fi
+  echo "Published GitHub release: $TAG"
+else
+  echo "Next: gh release create $TAG \"$ZIP_PATH\" --title \"FastWords $TAG\" --notes-file <notes>"
+fi
