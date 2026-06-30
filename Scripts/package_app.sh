@@ -4,10 +4,14 @@ set -euo pipefail
 APP_NAME="FastWords"
 BUNDLE_ID="com.fastworld.FastWords"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+VERSION_FILE="$ROOT_DIR/Scripts/VERSION"
+BUILD_FILE="$ROOT_DIR/Scripts/BUILD_NUMBER"
 DIST_DIR="$ROOT_DIR/dist"
 APP_DIR="$DIST_DIR/$APP_NAME.app"
 CONTENTS_DIR="$APP_DIR/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"
+VERSION="$(cat "$VERSION_FILE")"
+BUILD_NUMBER="$(cat "$BUILD_FILE")"
 
 cd "$ROOT_DIR"
 swift build -c release
@@ -52,9 +56,9 @@ cat > "$CONTENTS_DIR/Info.plist" <<PLIST
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>
-  <string>0.2.0</string>
+  <string>$VERSION</string>
   <key>CFBundleVersion</key>
-  <string>2</string>
+  <string>$BUILD_NUMBER</string>
   <key>LSMinimumSystemVersion</key>
   <string>14.0</string>
   <key>LSUIElement</key>

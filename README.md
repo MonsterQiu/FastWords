@@ -65,7 +65,7 @@ swift test             # 跑测试（65 个单测）
 ./Scripts/package_app.sh   # 打包成 dist/FastWords.app
 open dist/FastWords.app
 
-./Scripts/release.sh       # 生成可分发的 dist/FastWords-vX.Y.Z.zip
+./Scripts/release.sh       # 生成可分发的 dist/FastWords-v0.2.1.zip
 ```
 
 ### 🔬 工作原理 / How It Works
@@ -133,7 +133,7 @@ swift test             # run tests (65 unit tests)
 ./Scripts/package_app.sh   # package into dist/FastWords.app
 open dist/FastWords.app
 
-./Scripts/release.sh       # produce a distributable dist/FastWords-vX.Y.Z.zip
+./Scripts/release.sh       # produce a distributable dist/FastWords-v0.2.1.zip
 ```
 
 ### 📜 License
