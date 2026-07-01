@@ -18,12 +18,14 @@ struct MenuBarPopoverView: View {
                     .padding(.top, 16)
                     .padding(.bottom, 10)
 
-                Divider().overlay(Theme.accent.opacity(0.18))
+                Divider().overlay(Theme.accent(for: store.settings.accentColor).opacity(0.18))
 
                 if let word = store.currentWord {
                     // Fixed title area (headword + phonetics) — independent of the
                     // scrolling content, so its position never changes per word.
                     titleArea(word)
+                        .id("title-\(word.id)")
+                        .transition(.asymmetric(insertion: .opacity.combined(with: .offset(x: 8)), removal: .opacity.combined(with: .offset(x: -8))))
                         .padding(.horizontal, 20)
                         .padding(.top, 14)
                         .padding(.bottom, 6)
@@ -33,6 +35,8 @@ struct MenuBarPopoverView: View {
                     // content a word has. Long content scrolls inside this region.
                     ScrollView {
                         wordDetail(word)
+                            .id("detail-\(word.id)")
+                            .transition(.asymmetric(insertion: .opacity.combined(with: .offset(x: 8)), removal: .opacity.combined(with: .offset(x: -8))))
                             .padding(.horizontal, 20)
                             .padding(.vertical, 10)
                             .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -40,7 +44,7 @@ struct MenuBarPopoverView: View {
                     .scrollIndicators(.automatic)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
 
-                    Divider().overlay(Theme.accent.opacity(0.10))
+                    Divider().overlay(Theme.accent(for: store.settings.accentColor).opacity(0.10))
 
                     controls(for: word)
                         .padding(.horizontal, 20)
@@ -50,12 +54,13 @@ struct MenuBarPopoverView: View {
                     emptyState
                 }
             }
+            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: store.currentWord?.id)
 
             // Invisible buttons that own the keyboard shortcuts.
             keyboardShortcuts
         }
         .frame(width: 360, height: 540)
-        .tint(Theme.accent)
+        .tint(Theme.accent(for: store.settings.accentColor))
         .onChange(of: store.currentWord?.id) { _, _ in
             revealedDefinitionWordID = nil
         }
@@ -80,7 +85,7 @@ struct MenuBarPopoverView: View {
     private var header: some View {
         HStack(spacing: 8) {
             Image(systemName: "book.closed.fill")
-                .foregroundStyle(Theme.accent)
+                .foregroundStyle(Theme.accent(for: store.settings.accentColor))
 
             bookSwitcher
 
@@ -199,10 +204,6 @@ struct MenuBarPopoverView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
         .background(Theme.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(Theme.stroke.opacity(0.6), lineWidth: 1)
-        )
     }
 
     /// US + UK phonetics, stacked vertically (one per line) so even long
@@ -231,7 +232,7 @@ struct MenuBarPopoverView: View {
             HStack(spacing: 6) {
                 Text(label)
                     .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(Theme.accent)
+                    .foregroundStyle(Theme.accent(for: store.settings.accentColor))
                     .frame(width: 20, alignment: .leading)
                 Text(MeaningFormatter.formattedPhonetic(value))
                     .font(.maple(13))
@@ -240,7 +241,7 @@ struct MenuBarPopoverView: View {
                     .minimumScaleFactor(0.7)
                 Image(systemName: "speaker.wave.2.fill")
                     .font(.system(size: 11))
-                    .foregroundStyle(Theme.accent)
+                    .foregroundStyle(Theme.accent(for: store.settings.accentColor))
             }
         }
         .buttonStyle(.plain)
@@ -277,7 +278,7 @@ struct MenuBarPopoverView: View {
                 if let pos {
                     Text(pos)
                         .font(.system(size: 13, weight: .semibold, design: .rounded))
-                        .foregroundStyle(Theme.accent)
+                        .foregroundStyle(Theme.accent(for: store.settings.accentColor))
                 }
                 Text(body.isEmpty ? "暂无释义，点击 Dictionary 查询。" : body)
                     .font(.system(size: 16, weight: .medium))
@@ -288,10 +289,6 @@ struct MenuBarPopoverView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(14)
             .background(Theme.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(Theme.stroke.opacity(0.6), lineWidth: 1)
-            )
         }
     }
 
@@ -330,7 +327,7 @@ struct MenuBarPopoverView: View {
     private func frostedVeil(_ shape: RoundedRectangle) -> some View {
         ZStack {
             shape.fill(.ultraThinMaterial).opacity(0.5)
-            shape.fill(Theme.accent.opacity(0.06))
+            shape.fill(Theme.accent(for: store.settings.accentColor).opacity(0.06))
             shape.fill(
                 LinearGradient(
                     colors: [.white.opacity(0.18), .clear, .white.opacity(0.05)],
@@ -362,10 +359,8 @@ struct MenuBarPopoverView: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.leading, 12)
-        .overlay(alignment: .leading) {
-            RoundedRectangle(cornerRadius: 2).fill(Theme.accent.opacity(0.5)).frame(width: 3)
-        }
+        .padding(14)
+        .background(Theme.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
     @ViewBuilder
@@ -378,7 +373,7 @@ struct MenuBarPopoverView: View {
                     .foregroundStyle(Theme.ink)
                     .padding(12)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Theme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
+                    .background(Theme.accent(for: store.settings.accentColor).opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
             }
         case .loading:
             HStack(spacing: 8) {
@@ -430,7 +425,7 @@ struct MenuBarPopoverView: View {
                         .background(color(for: grade).opacity(0.15), in: Capsule())
                         .overlay(Capsule().stroke(color(for: grade).opacity(0.35), lineWidth: 1))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(ScaleButtonStyle())
                 .help(grade.title)
             }
         }
@@ -444,7 +439,7 @@ struct MenuBarPopoverView: View {
         case .hard:
             Color(.systemOrange)
         case .good:
-            Theme.accent
+            Theme.accent(for: store.settings.accentColor)
         }
     }
 
@@ -458,13 +453,13 @@ struct MenuBarPopoverView: View {
                 Text(entry.status == .mastered ? "已掌握" : "已认识")
             }
             .font(.system(size: 15, weight: .semibold, design: .rounded))
-            .foregroundStyle(Theme.accent)
+            .foregroundStyle(Theme.accent(for: store.settings.accentColor))
             .frame(maxWidth: .infinity)
             .padding(.vertical, 11)
-            .background(Theme.accent.opacity(0.15), in: Capsule())
-            .overlay(Capsule().stroke(Theme.accent.opacity(0.35), lineWidth: 1))
+            .background(Theme.accent(for: store.settings.accentColor).opacity(0.15), in: Capsule())
+            .overlay(Capsule().stroke(Theme.accent(for: store.settings.accentColor).opacity(0.35), lineWidth: 1))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(ScaleButtonStyle())
     }
 
     /// Icon-only circular nav button (Apple-style) — just a chevron, no label.
@@ -476,7 +471,7 @@ struct MenuBarPopoverView: View {
                 .frame(width: 34, height: 34)
                 .background(Circle().fill(Color.primary.opacity(0.06)))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(ScaleButtonStyle())
     }
 
     /// Smart-mode "known" via the Space shortcut grades the word `good`; other
@@ -490,27 +485,27 @@ struct MenuBarPopoverView: View {
     }
 
     private func secondaryRow(_ entry: WordEntry) -> some View {
-        HStack(spacing: 16) {
-            iconLink("character.book.closed", "查词典", action: actions.lookUp)
+        HStack(spacing: 12) {
+            iconLink("character.book.closed", tooltip: "查词典", action: actions.lookUp)
                 .disabled(store.lookupState == .loading)
-            iconLink("sparkles", "AI 提示", action: actions.generateAIInsight)
+            iconLink("sparkles", tooltip: "AI 提示", action: actions.generateAIInsight)
                 .disabled(!store.settings.aiEnabled || store.aiState == .loading)
             Spacer()
-            iconLink("door.left.hand.open", "退出", action: actions.quit)
-            iconLink("gearshape", "设置", action: actions.openSettings)
+            iconLink("gearshape", tooltip: "设置", action: actions.openSettings)
+            iconLink("door.left.hand.open", tooltip: "退出", action: actions.quit)
         }
-        .font(.system(size: 12))
     }
 
-    private func iconLink(_ systemImage: String, _ title: String, action: @escaping () -> Void) -> some View {
+    private func iconLink(_ systemImage: String, tooltip: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            HStack(spacing: 4) {
-                Image(systemName: systemImage)
-                Text(title)
-            }
-            .foregroundStyle(Theme.inkSoft)
+            Image(systemName: systemImage)
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(Theme.inkSoft)
+                .frame(width: 32, height: 32)
+                .background(Color.primary.opacity(0.06), in: Circle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(ScaleButtonStyle())
+        .help(tooltip)
     }
 
     // MARK: - Notices
@@ -547,7 +542,7 @@ struct MenuBarPopoverView: View {
         VStack(spacing: 14) {
             Image(systemName: "tray")
                 .font(.system(size: 40))
-                .foregroundStyle(Theme.accent.opacity(0.6))
+                .foregroundStyle(Theme.accent(for: store.settings.accentColor).opacity(0.6))
             Text("还没有词书")
                 .font(.system(size: 18, weight: .semibold, design: .rounded))
                 .foregroundStyle(Theme.ink)
@@ -557,7 +552,7 @@ struct MenuBarPopoverView: View {
                 .multilineTextAlignment(.center)
             Button("导入词书", action: actions.importWordBook)
                 .buttonStyle(.borderedProminent)
-                .tint(Theme.accentFill)
+                .tint(Theme.accentFill(for: store.settings.accentColor))
         }
         .padding(28)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -581,5 +576,14 @@ struct MenuBarPopoverView: View {
         .opacity(0)
         .frame(width: 0, height: 0)
         .accessibilityHidden(true)
+    }
+}
+
+struct ScaleButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.93 : 1.0)
+            .opacity(configuration.isPressed ? 0.8 : 1.0)
+            .animation(.interactiveSpring(response: 0.2, dampingFraction: 0.7), value: configuration.isPressed)
     }
 }

@@ -1,3 +1,4 @@
+import FastWordsCore
 import SwiftUI
 
 /// Visual design tokens: text uses system semantic colors so it stays legible
@@ -13,9 +14,23 @@ enum Theme {
     /// Muted secondary text.
     static let inkSoft = Color.secondary
     /// Bright azure accent for marks, chips, and interactive glyphs.
-    static let accent = Color(light: rgb(0.13, 0.42, 0.86), dark: rgb(0.45, 0.70, 1.0))
+    static func accent(for color: AccentColor) -> Color {
+        switch color {
+        case .blue: return Color(light: rgb(0.13, 0.42, 0.86), dark: rgb(0.45, 0.70, 1.0))
+        case .green: return Color(light: rgb(0.13, 0.65, 0.47), dark: rgb(0.35, 0.85, 0.65))
+        case .purple: return Color(light: rgb(0.45, 0.35, 0.80), dark: rgb(0.65, 0.55, 0.95))
+        case .red: return Color(light: rgb(0.85, 0.25, 0.30), dark: rgb(0.95, 0.45, 0.50))
+        }
+    }
     /// Filled accent for the primary action pill.
-    static let accentFill = Color(light: rgb(0.15, 0.45, 0.90), dark: rgb(0.30, 0.55, 0.98))
+    static func accentFill(for color: AccentColor) -> Color {
+        switch color {
+        case .blue: return Color(light: rgb(0.15, 0.45, 0.90), dark: rgb(0.30, 0.55, 0.98))
+        case .green: return Color(light: rgb(0.15, 0.70, 0.50), dark: rgb(0.35, 0.90, 0.70))
+        case .purple: return Color(light: rgb(0.50, 0.40, 0.85), dark: rgb(0.70, 0.60, 0.98))
+        case .red: return Color(light: rgb(0.90, 0.30, 0.35), dark: rgb(0.98, 0.50, 0.55))
+        }
+    }
 
     private static func rgb(_ r: CGFloat, _ g: CGFloat, _ b: CGFloat) -> NSColor {
         NSColor(srgbRed: r, green: g, blue: b, alpha: 1)

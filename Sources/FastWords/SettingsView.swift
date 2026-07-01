@@ -5,12 +5,13 @@ struct SettingsView: View {
     @ObservedObject var store: WordStore
 
     private enum Section: String, CaseIterable, Identifiable {
-        case stats, review, pronunciation, books, ai
+        case stats, review, appearance, pronunciation, books, ai
         var id: String { rawValue }
         var title: String {
             switch self {
             case .stats: "统计"
             case .review: "复习"
+            case .appearance: "外观"
             case .pronunciation: "发音"
             case .books: "词书"
             case .ai: "AI 助手"
@@ -20,6 +21,7 @@ struct SettingsView: View {
             switch self {
             case .stats: "chart.bar.xaxis"
             case .review: "arrow.triangle.2.circlepath"
+            case .appearance: "paintpalette"
             case .pronunciation: "speaker.wave.2"
             case .books: "books.vertical"
             case .ai: "sparkles"
@@ -79,6 +81,7 @@ struct SettingsView: View {
         switch selection {
         case .stats: StatsView(store: store)
         case .review: reviewSettings
+        case .appearance: appearanceSettings
         case .pronunciation: pronunciationSettings
         case .books: bookSettings
         case .ai: aiSettings
@@ -114,6 +117,29 @@ struct SettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+        }
+        .formStyle(.grouped)
+    }
+
+    private func reviewModeTitle(_ mode: ReviewMode) -> String {
+        switch mode {
+        case .sequential: "顺序"
+        case .random: "随机"
+        case .smart: "智能（间隔重复）"
+        }
+    }
+
+    // MARK: - 外观
+
+    private var appearanceSettings: some View {
+        Form {
+            SwiftUI.Section("颜色") {
+                Picker("主题色", selection: binding(\.accentColor)) {
+                    ForEach(AccentColor.allCases) { color in
+                        Text(color.title).tag(color)
+                    }
+                }
+            }
 
             SwiftUI.Section("卡片显示内容") {
                 Toggle("中文释义", isOn: binding(\.showChinese))
@@ -127,13 +153,7 @@ struct SettingsView: View {
         .formStyle(.grouped)
     }
 
-    private func reviewModeTitle(_ mode: ReviewMode) -> String {
-        switch mode {
-        case .sequential: "顺序"
-        case .random: "随机"
-        case .smart: "智能（间隔重复）"
-        }
-    }
+
 
     // MARK: - 发音
 

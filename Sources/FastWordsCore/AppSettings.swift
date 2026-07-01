@@ -38,6 +38,24 @@ public enum ReviewMode: String, Codable, CaseIterable, Identifiable, Sendable {
     }
 }
 
+public enum AccentColor: String, Codable, CaseIterable, Identifiable, Sendable {
+    case blue
+    case green
+    case purple
+    case red
+
+    public var id: String { rawValue }
+
+    public var title: String {
+        switch self {
+        case .blue: "Indigo"
+        case .green: "Mint"
+        case .purple: "Lilac"
+        case .red: "Maple"
+        }
+    }
+}
+
 public struct AppSettings: Codable, Equatable, Sendable {
     public var refreshInterval: TimeInterval
     public var displayMode: DisplayMode
@@ -66,6 +84,9 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// Show the keyboard-shortcut hint bar on the word card.
     public var showShortcutHint: Bool
 
+    /// User chosen accent color for the UI.
+    public var accentColor: AccentColor
+
     public init(
         refreshInterval: TimeInterval = 60,
         displayMode: DisplayMode = .wordAndMeaning,
@@ -83,7 +104,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
         showPhonetic: Bool = true,
         showExample: Bool = true,
         showAIHint: Bool = true,
-        showShortcutHint: Bool = true
+        showShortcutHint: Bool = true,
+        accentColor: AccentColor = .blue
     ) {
         self.refreshInterval = refreshInterval
         self.displayMode = displayMode
@@ -102,6 +124,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         self.showExample = showExample
         self.showAIHint = showAIHint
         self.showShortcutHint = showShortcutHint
+        self.accentColor = accentColor
     }
 
     // Backward-compatible decoding: settings saved before pronunciation existed
@@ -126,5 +149,6 @@ public struct AppSettings: Codable, Equatable, Sendable {
         showExample = try container.decodeIfPresent(Bool.self, forKey: .showExample) ?? defaults.showExample
         showAIHint = try container.decodeIfPresent(Bool.self, forKey: .showAIHint) ?? defaults.showAIHint
         showShortcutHint = try container.decodeIfPresent(Bool.self, forKey: .showShortcutHint) ?? defaults.showShortcutHint
+        accentColor = try container.decodeIfPresent(AccentColor.self, forKey: .accentColor) ?? defaults.accentColor
     }
 }
