@@ -436,9 +436,9 @@ struct MenuBarPopoverView: View {
     private func color(for grade: ReviewGrade) -> Color {
         switch grade {
         case .again:
-            Color(.systemRed)
+            Color(light: NSColor(srgbRed: 0.90, green: 0.35, blue: 0.38, alpha: 1), dark: NSColor(srgbRed: 0.95, green: 0.45, blue: 0.48, alpha: 1))
         case .hard:
-            Color(.systemOrange)
+            Color(light: NSColor(srgbRed: 0.85, green: 0.55, blue: 0.20, alpha: 1), dark: NSColor(srgbRed: 0.90, green: 0.65, blue: 0.35, alpha: 1))
         case .good:
             Theme.accent(for: store.settings.accentColor)
         }

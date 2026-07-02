@@ -356,26 +356,31 @@ struct SettingsView: View {
 
     private var aiSettings: some View {
         Form {
-            Toggle("启用 AI 记忆提示", isOn: binding(\.aiEnabled))
-
-            TextField("接口地址（Base URL）", text: binding(\.aiBaseURL))
-                .textFieldStyle(.roundedBorder)
-            TextField("模型名称", text: binding(\.aiModel))
-                .textFieldStyle(.roundedBorder)
-            SecureField("API Key", text: binding(\.aiAPIKey))
-                .textFieldStyle(.roundedBorder)
-
-            SwiftUI.Section("专属定制语境") {
-                TextField("你的身份/兴趣（例如：iOS 程序员、考研党、爱猫人士）", text: binding(\.userContext))
-                    .textFieldStyle(.roundedBorder)
-                Text("AI 将根据此身份生成极具画面感和针对性的专属记忆故事与例句。")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            SwiftUI.Section {
+                Toggle("启用 AI 记忆提示", isOn: binding(\.aiEnabled))
             }
 
-            Text("使用兼容 OpenAI 的 /chat/completions 接口，由你自己的服务商提供。")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            SwiftUI.Section {
+                TextField("接口地址（Base URL）", text: binding(\.aiBaseURL))
+                    .textFieldStyle(.roundedBorder)
+                TextField("模型名称", text: binding(\.aiModel))
+                    .textFieldStyle(.roundedBorder)
+                SecureField("API Key", text: binding(\.aiAPIKey))
+                    .textFieldStyle(.roundedBorder)
+            } header: {
+                Text("接口配置")
+            } footer: {
+                Text("使用兼容 OpenAI 的 /chat/completions 接口，由你自己的服务商提供。")
+            }
+
+            SwiftUI.Section {
+                TextField("你的身份/兴趣（例如：iOS 程序员、考研党）", text: binding(\.userContext))
+                    .textFieldStyle(.roundedBorder)
+            } header: {
+                Text("专属定制语境")
+            } footer: {
+                Text("AI 将根据此身份生成极具画面感和针对性的专属记忆故事与例句。")
+            }
         }
         .formStyle(.grouped)
     }
