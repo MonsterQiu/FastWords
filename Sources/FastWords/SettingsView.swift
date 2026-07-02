@@ -361,12 +361,21 @@ struct SettingsView: View {
             }
 
             SwiftUI.Section {
-                TextField("接口地址（Base URL）", text: binding(\.aiBaseURL))
-                    .textFieldStyle(.roundedBorder)
-                TextField("模型名称", text: binding(\.aiModel))
-                    .textFieldStyle(.roundedBorder)
-                SecureField("API Key", text: binding(\.aiAPIKey))
-                    .textFieldStyle(.roundedBorder)
+                LabeledContent("接口地址 (Base URL)") {
+                    TextField("https://api.openai.com/v1", text: binding(\.aiBaseURL))
+                        .textFieldStyle(.roundedBorder)
+                }
+                LabeledContent("模型名称") {
+                    ModelSelectorView(
+                        baseURL: binding(\.aiBaseURL),
+                        apiKey: binding(\.aiAPIKey),
+                        selectedModel: binding(\.aiModel)
+                    )
+                }
+                LabeledContent("API Key") {
+                    SecureField("sk-...", text: binding(\.aiAPIKey))
+                        .textFieldStyle(.roundedBorder)
+                }
             } header: {
                 Text("接口配置")
             } footer: {
