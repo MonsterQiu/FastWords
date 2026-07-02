@@ -262,7 +262,6 @@ final class WordStore: ObservableObject {
         settings.showChinese = true
         settings.showEnglish = true
         settings.showPhonetic = true
-        settings.showExample = true
         settings.showAIHint = true
         settings.showShortcutHint = true
     }

@@ -148,7 +148,6 @@ struct SettingsView: View {
                 Toggle("中文释义", isOn: binding(\.showChinese))
                 Toggle("英英释义", isOn: binding(\.showEnglish))
                 Toggle("音标", isOn: binding(\.showPhonetic))
-                Toggle("例句", isOn: binding(\.showExample))
                 Toggle("AI 记忆提示", isOn: binding(\.showAIHint))
                 Toggle("快捷键提示栏", isOn: binding(\.showShortcutHint))
             }

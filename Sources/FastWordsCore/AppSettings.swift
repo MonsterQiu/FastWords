@@ -79,7 +79,6 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var showChinese: Bool
     public var showEnglish: Bool
     public var showPhonetic: Bool
-    public var showExample: Bool
     public var showAIHint: Bool
     /// Show the keyboard-shortcut hint bar on the word card.
     public var showShortcutHint: Bool
@@ -105,7 +104,6 @@ public struct AppSettings: Codable, Equatable, Sendable {
         showChinese: Bool = true,
         showEnglish: Bool = true,
         showPhonetic: Bool = true,
-        showExample: Bool = true,
         showAIHint: Bool = true,
         showShortcutHint: Bool = true,
         accentColor: AccentColor = .blue,
@@ -125,7 +123,6 @@ public struct AppSettings: Codable, Equatable, Sendable {
         self.showChinese = showChinese
         self.showEnglish = showEnglish
         self.showPhonetic = showPhonetic
-        self.showExample = showExample
         self.showAIHint = showAIHint
         self.showShortcutHint = showShortcutHint
         self.accentColor = accentColor
@@ -151,7 +148,6 @@ public struct AppSettings: Codable, Equatable, Sendable {
         showChinese = try container.decodeIfPresent(Bool.self, forKey: .showChinese) ?? defaults.showChinese
         showEnglish = try container.decodeIfPresent(Bool.self, forKey: .showEnglish) ?? defaults.showEnglish
         showPhonetic = try container.decodeIfPresent(Bool.self, forKey: .showPhonetic) ?? defaults.showPhonetic
-        showExample = try container.decodeIfPresent(Bool.self, forKey: .showExample) ?? defaults.showExample
         showAIHint = try container.decodeIfPresent(Bool.self, forKey: .showAIHint) ?? defaults.showAIHint
         showShortcutHint = try container.decodeIfPresent(Bool.self, forKey: .showShortcutHint) ?? defaults.showShortcutHint
         accentColor = try container.decodeIfPresent(AccentColor.self, forKey: .accentColor) ?? defaults.accentColor

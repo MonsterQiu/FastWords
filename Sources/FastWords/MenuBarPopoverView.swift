@@ -180,10 +180,6 @@ struct MenuBarPopoverView: View {
                 englishBlock(entry)
             }
 
-            if settings.showExample, !entry.example.isEmpty {
-                exampleBlock(entry)
-            }
-
             if settings.showAIHint {
                 aiBlock(entry)
             }
@@ -346,21 +342,6 @@ struct MenuBarPopoverView: View {
                 lineWidth: 1
             )
         )
-    }
-
-    private func exampleBlock(_ entry: WordEntry) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("例句")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(Theme.inkSoft)
-            Text(entry.example)
-                .font(.system(size: 14))
-                .foregroundStyle(Theme.ink)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(14)
-        .background(Theme.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
     @ViewBuilder
