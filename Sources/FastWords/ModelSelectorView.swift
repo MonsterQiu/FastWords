@@ -33,14 +33,14 @@ struct ModelSelectorView: View {
             
             if !availableModels.isEmpty {
                 Picker("", selection: $selectedModel) {
-                    Text("请选择...").tag("")
+                    Text("请选择模型...").tag("")
                     ForEach(availableModels, id: \.self) { model in
                         Text(model).tag(model)
                     }
                 }
                 .labelsHidden()
             } else {
-                TextField("模型名称 (如: gpt-3.5-turbo)", text: $selectedModel)
+                TextField("模型名称", text: $selectedModel)
                     .textFieldStyle(.roundedBorder)
             }
         }
