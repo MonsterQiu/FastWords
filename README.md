@@ -34,9 +34,12 @@ FastWords 是一款常驻 **macOS 菜单栏**的背单词工具：单词安静�
 - **🎓 8 本考试词书** — 中考 / 高考 / 四级 / 六级 / 考研 / 托福 / 雅思 / GRE，一键加载切换，各自独立保存进度。
 - **🔊 发音** — macOS 内置 TTS（美音 / 英音、可调语速、离线），有真人音频时优先播放并缓存；US / UK 双音标。
 - **📚 多词书管理** — 可同时维护多本词书、随时切换；导入时**合并去重并保留已有进度**。
+- **🤖 专属 AI 记忆助理** — 支持自定义你的身份/职业/语境，自动生成属于你个人的「词根拆解」与「幽默串记」；当某词频繁出错时，自动补充「易混词辨析」。
+- **☁️ iCloud 无缝同步** — 零配置开启，进度自动在 Mac 设备间同步，完全本地+iCloud 驱动，无需注册任何账号。
+- **📖 系统原生词典联动** — 一键瞬间唤起 macOS 系统自带词典，查看极其详尽的大部头释义与维基百科。
 - **📊 学习热力图** — GitHub 风格的每日学习热力图 + 今日 / 连续天数 / 累计 / 已掌握统计。
 - **⌨️ 顺手** — 键盘快捷键（Space 已认识、←/→ 翻页、↵ 朗读）、卡片显示内容自由开关、深靛蓝 + Maple 字体的精致界面。
-- **🔒 纯本地** — 所有进度与设置存在 `~/Library/Application Support/FastWords/`，无账号、无云、无广告。
+- **🔒 极简安全** — 无账号、无服务器、无广告。所有数据完全掌控在你自己的电脑与 iCloud 中。
 
 ### 📥 下载安装
 
@@ -102,9 +105,12 @@ FastWords is a **macOS menu-bar** vocabulary app: words sit quietly in your menu
 - **🎓 8 exam word books** — Zhongkao / Gaokao / CET-4 / CET-6 / Postgrad / TOEFL / IELTS / GRE; load and switch with one tap, each keeps its own progress.
 - **🔊 Pronunciation** — built-in macOS TTS (US/UK accents, adjustable rate, offline), preferring & caching human audio when available; US/UK phonetics.
 - **📚 Multiple word books** — keep several books, switch anytime; importing **merges & de-dupes while preserving existing progress**.
+- **🤖 Personalized AI Assistant** — input your profession/context, and the AI generates customized mnemonics, root breakdowns, and dynamic synonym disambiguation for tricky words.
+- **☁️ iCloud Sync** — zero-config synchronization across your Macs. Fully driven by local storage and iCloud; no accounts needed.
+- **📖 Native Dictionary Integration** — one-click instant access to macOS's built-in Dictionary app for deep, comprehensive definitions and Wikipedia lookups.
 - **📊 Learning heatmap** — a GitHub-style daily-learning heatmap plus today / streak / total / mastered stats.
 - **⌨️ Frictionless** — keyboard shortcuts (Space = known, ←/→ = navigate, ↵ = speak), per-card content toggles, a refined indigo + Maple-Mono UI.
-- **🔒 Fully local** — all progress & settings live in `~/Library/Application Support/FastWords/`. No account, no cloud, no ads.
+- **🔒 Private & Secure** — no accounts, no backend servers, no ads. Your data stays entirely on your Mac and your personal iCloud.
 
 ### 📥 Download & Install
 
