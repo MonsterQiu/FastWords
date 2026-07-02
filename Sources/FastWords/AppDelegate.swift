@@ -91,6 +91,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     toggleMastered: { [weak self] in self?.store.toggleMastered(); self?.updateStatusTitle() },
                     speak: { [weak self] accent in self?.speakCurrentWord(accent: accent) },
                     lookUp: { [weak self] in self?.lookUpCurrentWord() },
+                    openSystemDictionary: { [weak self] in self?.openSystemDictionary() },
                     importWordBook: { [weak self] in self?.importWordBook() },
                     restoreSamples: { [weak self] in self?.store.restoreSamples(); self?.advanced() },
                     generateAIInsight: { [weak self] in self?.generateAIInsight() },
@@ -205,6 +206,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 await MainActor.run { self.store.failLookup(message) }
             }
         }
+    }
+
+    private func openSystemDictionary() {
+        guard let word = store.currentWord?.word,
+              let url = URL(string: "dict://\(word.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? word)")
+        else { return }
+        NSWorkspace.shared.open(url)
     }
 
     private func updateStatusTitle() {

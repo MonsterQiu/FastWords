@@ -67,16 +67,14 @@ final class WordStore: ObservableObject {
     /// legacy word data during migration).
     private var isLoading = false
 
-    private let stateURL: URL
+    private var stateURL: URL { directory.appendingPathComponent("state.json") }
     /// Directory where downloaded pronunciation clips are cached.
-    let audioDirectory: URL
+    var audioDirectory: URL { directory.appendingPathComponent("audio", isDirectory: true) }
+
+    /// The base directory, dynamically resolved so toggling iCloud updates it.
+    private var directory: URL { iCloudSyncService.activeDirectory }
 
     init() {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        let directory = appSupport.appendingPathComponent("FastWords", isDirectory: true)
-        stateURL = directory.appendingPathComponent("state.json")
-        audioDirectory = directory.appendingPathComponent("audio", isDirectory: true)
-
         load()
     }
 

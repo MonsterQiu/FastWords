@@ -87,6 +87,9 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// User chosen accent color for the UI.
     public var accentColor: AccentColor
 
+    /// User's personal context/interests to tailor AI insights.
+    public var userContext: String
+
     public init(
         refreshInterval: TimeInterval = 60,
         displayMode: DisplayMode = .wordAndMeaning,
@@ -105,7 +108,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
         showExample: Bool = true,
         showAIHint: Bool = true,
         showShortcutHint: Bool = true,
-        accentColor: AccentColor = .blue
+        accentColor: AccentColor = .blue,
+        userContext: String = ""
     ) {
         self.refreshInterval = refreshInterval
         self.displayMode = displayMode
@@ -125,6 +129,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         self.showAIHint = showAIHint
         self.showShortcutHint = showShortcutHint
         self.accentColor = accentColor
+        self.userContext = userContext
     }
 
     // Backward-compatible decoding: settings saved before pronunciation existed
@@ -150,5 +155,6 @@ public struct AppSettings: Codable, Equatable, Sendable {
         showAIHint = try container.decodeIfPresent(Bool.self, forKey: .showAIHint) ?? defaults.showAIHint
         showShortcutHint = try container.decodeIfPresent(Bool.self, forKey: .showShortcutHint) ?? defaults.showShortcutHint
         accentColor = try container.decodeIfPresent(AccentColor.self, forKey: .accentColor) ?? defaults.accentColor
+        userContext = try container.decodeIfPresent(String.self, forKey: .userContext) ?? defaults.userContext
     }
 }

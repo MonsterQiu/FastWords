@@ -5,7 +5,7 @@ struct SettingsView: View {
     @ObservedObject var store: WordStore
 
     private enum Section: String, CaseIterable, Identifiable {
-        case stats, review, appearance, pronunciation, books, ai
+        case stats, review, appearance, pronunciation, books, sync, ai
         var id: String { rawValue }
         var title: String {
             switch self {
@@ -14,6 +14,7 @@ struct SettingsView: View {
             case .appearance: "外观"
             case .pronunciation: "发音"
             case .books: "词书"
+            case .sync: "同步"
             case .ai: "AI 助手"
             }
         }
@@ -24,6 +25,7 @@ struct SettingsView: View {
             case .appearance: "paintpalette"
             case .pronunciation: "speaker.wave.2"
             case .books: "books.vertical"
+            case .sync: "icloud"
             case .ai: "sparkles"
             }
         }
@@ -84,6 +86,7 @@ struct SettingsView: View {
         case .appearance: appearanceSettings
         case .pronunciation: pronunciationSettings
         case .books: bookSettings
+        case .sync: syncSettings
         case .ai: aiSettings
         }
     }
@@ -328,6 +331,27 @@ struct SettingsView: View {
         )
     }
 
+    // MARK: - 同步 (iCloud)
+
+    @AppStorage(iCloudSyncService.userDefaultsKey) private var iCloudSyncEnabled = false
+
+    private var syncSettings: some View {
+        Form {
+            SwiftUI.Section {
+                Toggle("启用 iCloud 云盘同步", isOn: $iCloudSyncEnabled)
+                    .onChange(of: iCloudSyncEnabled) { _, newValue in
+                        iCloudSyncService.performMigrationIfNeeded(toCloud: newValue)
+                        store.load() // Reload from the new directory
+                    }
+                
+                Text("将词书进度和设置自动保存到你的 iCloud 云盘中（FastWords 文件夹），实现多台 Mac 无缝同步。无需注册账号，安全且完全免费。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .formStyle(.grouped)
+    }
+
     // MARK: - AI
 
     private var aiSettings: some View {
@@ -340,6 +364,14 @@ struct SettingsView: View {
                 .textFieldStyle(.roundedBorder)
             SecureField("API Key", text: binding(\.aiAPIKey))
                 .textFieldStyle(.roundedBorder)
+
+            SwiftUI.Section("专属定制语境") {
+                TextField("你的身份/兴趣（例如：iOS 程序员、考研党、爱猫人士）", text: binding(\.userContext))
+                    .textFieldStyle(.roundedBorder)
+                Text("AI 将根据此身份生成极具画面感和针对性的专属记忆故事与例句。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
 
             Text("使用兼容 OpenAI 的 /chat/completions 接口，由你自己的服务商提供。")
                 .font(.caption)

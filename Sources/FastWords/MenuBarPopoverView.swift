@@ -368,8 +368,9 @@ struct MenuBarPopoverView: View {
         switch store.aiState {
         case .idle:
             if !entry.note.isEmpty {
-                Text(entry.note)
+                Text(.init(entry.note))
                     .font(.system(size: 13))
+                    .lineSpacing(4)
                     .foregroundStyle(Theme.ink)
                     .padding(12)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -486,8 +487,7 @@ struct MenuBarPopoverView: View {
 
     private func secondaryRow(_ entry: WordEntry) -> some View {
         HStack(spacing: 12) {
-            iconLink("character.book.closed", tooltip: "查词典", action: actions.lookUp)
-                .disabled(store.lookupState == .loading)
+            iconLink("text.book.closed", tooltip: "系统词典", action: actions.openSystemDictionary)
             iconLink("sparkles", tooltip: "AI 提示", action: actions.generateAIInsight)
                 .disabled(!store.settings.aiEnabled || store.aiState == .loading)
             Spacer()

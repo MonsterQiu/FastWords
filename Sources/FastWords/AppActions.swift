@@ -8,6 +8,7 @@ struct AppActions {
     var toggleMastered: () -> Void
     var speak: (SpeechAccent) -> Void
     var lookUp: () -> Void
+    var openSystemDictionary: () -> Void
     var importWordBook: () -> Void
     var restoreSamples: () -> Void
     var generateAIInsight: () -> Void

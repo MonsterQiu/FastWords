@@ -50,11 +50,16 @@ public struct AIClient: Sendable {
             messages: [
                 ChatMessage(
                     role: "system",
-                    content: "You help Chinese speakers memorize English vocabulary. Keep replies under 80 Chinese characters."
+                    content: """
+                    你是一个记忆专家。请输出精简的记忆提示（总计不超过100字），绝不输出多余的寒暄或废话。
+                    请严格按以下模板输出，替换括号内容：
+                    🧩 [词根或谐音，30字以内]
+                    📖 [结合用户身份的搞笑短句，40字以内]
+                    """ + (entry.fsrs.lapses > 0 ? "\n💡 [一句话易混词辨析，30字以内]" : "")
                 ),
                 ChatMessage(
                     role: "user",
-                    content: "单词：\(entry.word)\n释义：\(entry.meaning)\n请给一个幽默但有记忆点的例句或词根提示。"
+                    content: "单词：\(entry.word)\n释义：\(entry.meaning)\n用户身份/兴趣：\(settings.userContext.isEmpty ? "无特定背景" : settings.userContext)"
                 )
             ],
             temperature: 0.7
