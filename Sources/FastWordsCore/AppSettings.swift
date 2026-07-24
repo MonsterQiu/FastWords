@@ -89,6 +89,9 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// Seconds before auto-revealing a masked meaning; `0` means tap-only.
     public var activeRecallAutoSeconds: Double
 
+    /// Global hotkey (⌥⌘W) capture of selected text in other apps.
+    public var globalCaptureEnabled: Bool
+
     /// User chosen accent color for the UI.
     public var accentColor: AccentColor
 
@@ -115,6 +118,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         showShortcutHint: Bool = true,
         activeRecall: Bool = true,
         activeRecallAutoSeconds: Double = 10,
+        globalCaptureEnabled: Bool = true,
         accentColor: AccentColor = .blue,
         userContext: String = ""
     ) {
@@ -137,6 +141,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         self.showShortcutHint = showShortcutHint
         self.activeRecall = activeRecall
         self.activeRecallAutoSeconds = activeRecallAutoSeconds
+        self.globalCaptureEnabled = globalCaptureEnabled
         self.accentColor = accentColor
         self.userContext = userContext
     }
@@ -165,6 +170,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         showShortcutHint = try container.decodeIfPresent(Bool.self, forKey: .showShortcutHint) ?? defaults.showShortcutHint
         activeRecall = try container.decodeIfPresent(Bool.self, forKey: .activeRecall) ?? defaults.activeRecall
         activeRecallAutoSeconds = try container.decodeIfPresent(Double.self, forKey: .activeRecallAutoSeconds) ?? defaults.activeRecallAutoSeconds
+        globalCaptureEnabled = try container.decodeIfPresent(Bool.self, forKey: .globalCaptureEnabled) ?? defaults.globalCaptureEnabled
         accentColor = try container.decodeIfPresent(AccentColor.self, forKey: .accentColor) ?? defaults.accentColor
         userContext = try container.decodeIfPresent(String.self, forKey: .userContext) ?? defaults.userContext
     }

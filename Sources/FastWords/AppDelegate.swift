@@ -22,15 +22,68 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var settingsWindowController: SettingsWindowController?
     private var timer: Timer?
     private var cancellables: Set<AnyCancellable> = []
+    private let wordCapture = GlobalWordCapture()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         MapleFont.registerIfNeeded()
         installMainMenu()
         configureStatusItem()
         configurePopover()
+        configureWordCapture()
+        configureServices()
         bindStore()
         scheduleTimer()
         updateStatusTitle()
+    }
+
+    /// ⌥⌘W global capture + Accessibility selection read.
+    private func configureWordCapture() {
+        wordCapture.onCapture = { [weak self] text in
+            self?.processCapturedText(text)
+        }
+        wordCapture.setEnabled(store.settings.globalCaptureEnabled)
+    }
+
+    /// System Services menu: select text → Services → 加入 FastWords.
+    private func configureServices() {
+        NSApp.servicesProvider = self
+        NSUpdateDynamicServices()
+    }
+
+    /// Service entry point declared in Info.plist `NSServices` / `NSMessage`.
+    @objc
+    func addWordFromService(
+        _ pboard: NSPasteboard,
+        userData: String?,
+        error: AutoreleasingUnsafeMutablePointer<NSString?>?
+    ) {
+        let text = pboard.string(forType: .string)
+            ?? pboard.string(forType: NSPasteboard.PasteboardType("public.utf8-plain-text"))
+            ?? ""
+        Task { @MainActor in
+            self.processCapturedText(text)
+        }
+    }
+
+    /// Normalize selection → open popover → reuse the search funnel.
+    private func processCapturedText(_ raw: String) {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            store.showImportError("请先选中一个单词，再按 ⌥⌘W（需辅助功能权限）")
+            openPopoverFromMenu()
+            return
+        }
+
+        let headword = SearchQueryNormalizer.headword(from: trimmed)
+        guard !headword.isEmpty else {
+            store.showImportError("未能从选区识别出英文单词")
+            openPopoverFromMenu()
+            return
+        }
+
+        openPopoverFromMenu()
+        // Reuse full search path (jump / dictionary / spelling / AI / pending).
+        searchWord(headword, skipSpellingGate: false)
     }
 
     /// A menu-bar (.accessory) app has no main menu by default, so the standard
@@ -104,6 +157,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         openItem.target = self
         menu.addItem(openItem)
 
+        let clipItem = NSMenuItem(
+            title: "从剪贴板加入单词",
+            action: #selector(addFromClipboard),
+            keyEquivalent: ""
+        )
+        clipItem.target = self
+        menu.addItem(clipItem)
+
         let settingsItem = NSMenuItem(
             title: "设置…",
             action: #selector(openSettingsFromMenu),
@@ -121,6 +182,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ))
 
         return menu
+    }
+
+    @objc
+    private func addFromClipboard() {
+        let text = NSPasteboard.general.string(forType: .string) ?? ""
+        processCapturedText(text)
     }
 
     @objc
@@ -218,9 +285,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         store.$settings
             .receive(on: RunLoop.main)
-            .sink { [weak self] _ in
+            .sink { [weak self] settings in
                 self?.scheduleTimer()
                 self?.updateStatusTitle()
+                self?.wordCapture.setEnabled(settings.globalCaptureEnabled)
             }
             .store(in: &cancellables)
     }

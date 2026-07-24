@@ -81,6 +81,25 @@ cat > "$CONTENTS_DIR/Info.plist" <<PLIST
   <true/>
   <key>NSHighResolutionCapable</key>
   <true/>
+  <key>NSServices</key>
+  <array>
+    <dict>
+      <key>NSMenuItem</key>
+      <dict>
+        <key>default</key>
+        <string>加入 FastWords</string>
+      </dict>
+      <key>NSMessage</key>
+      <string>addWordFromService</string>
+      <key>NSPortName</key>
+      <string>FastWords</string>
+      <key>NSSendTypes</key>
+      <array>
+        <string>public.utf8-plain-text</string>
+        <string>NSStringPboardType</string>
+      </array>
+    </dict>
+  </array>
 </dict>
 </plist>
 PLIST

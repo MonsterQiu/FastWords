@@ -5,7 +5,7 @@ struct SettingsView: View {
     @ObservedObject var store: WordStore
 
     private enum Section: String, CaseIterable, Identifiable {
-        case stats, review, appearance, pronunciation, books, sync, ai
+        case stats, review, appearance, pronunciation, books, capture, sync, ai
         var id: String { rawValue }
         var title: String {
             switch self {
@@ -14,6 +14,7 @@ struct SettingsView: View {
             case .appearance: "外观"
             case .pronunciation: "发音"
             case .books: "词书"
+            case .capture: "划词"
             case .sync: "同步"
             case .ai: "AI 助手"
             }
@@ -25,6 +26,7 @@ struct SettingsView: View {
             case .appearance: "paintpalette"
             case .pronunciation: "speaker.wave.2"
             case .books: "books.vertical"
+            case .capture: "cursorarrow.click.2"
             case .sync: "icloud"
             case .ai: "sparkles"
             }
@@ -86,9 +88,55 @@ struct SettingsView: View {
         case .appearance: appearanceSettings
         case .pronunciation: pronunciationSettings
         case .books: bookSettings
+        case .capture: captureSettings
         case .sync: syncSettings
         case .ai: aiSettings
         }
+    }
+
+    // MARK: - 划词
+
+    private var captureSettings: some View {
+        Form {
+            SwiftUI.Section {
+                Toggle("启用全局快捷键划词", isOn: binding(\.globalCaptureEnabled))
+
+                LabeledContent("快捷键") {
+                    Text("⌥⌘W")
+                        .font(.body.monospaced())
+                        .foregroundStyle(.secondary)
+                }
+
+                HStack {
+                    let trusted = SelectionReader.isTrusted(prompt: false)
+                    Image(systemName: trusted ? "checkmark.shield.fill" : "exclamationmark.shield")
+                        .foregroundStyle(trusted ? .green : .orange)
+                    Text(trusted ? "已获得辅助功能权限" : "需要辅助功能权限才能读取其它 App 的选中文本")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    if !trusted {
+                        Button("打开系统设置") {
+                            SelectionReader.openAccessibilitySettings()
+                            _ = SelectionReader.isTrusted(prompt: true)
+                        }
+                    }
+                }
+            } header: {
+                Text("全局划词")
+            } footer: {
+                Text("在任意 App 中选中单词，按下 ⌥⌘W：打开 FastWords 并查询（词书已有则跳转，否则词典 / AI / 加入确认）。也可在系统「服务」菜单使用「加入 FastWords」（无需辅助功能）。")
+            }
+
+            SwiftUI.Section {
+                Text("服务菜单路径：选中文本 → 右键或 App 菜单 → 服务 → 加入 FastWords。若没有该项，打开「系统设置 → 键盘 → 键盘快捷键 → 服务」确认已勾选。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } header: {
+                Text("系统服务（备选）")
+            }
+        }
+        .formStyle(.grouped)
     }
 
     // MARK: - 复习
