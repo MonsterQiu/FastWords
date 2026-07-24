@@ -84,6 +84,11 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// Show the keyboard-shortcut hint bar on the word card.
     public var showShortcutHint: Bool
 
+    /// When true, Chinese meaning is masked until tap (or auto-reveal). Active recall.
+    public var activeRecall: Bool
+    /// Seconds before auto-revealing a masked meaning; `0` means tap-only.
+    public var activeRecallAutoSeconds: Double
+
     /// User chosen accent color for the UI.
     public var accentColor: AccentColor
 
@@ -108,6 +113,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
         showExample: Bool = true,
         showAIHint: Bool = true,
         showShortcutHint: Bool = true,
+        activeRecall: Bool = true,
+        activeRecallAutoSeconds: Double = 10,
         accentColor: AccentColor = .blue,
         userContext: String = ""
     ) {
@@ -128,6 +135,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
         self.showExample = showExample
         self.showAIHint = showAIHint
         self.showShortcutHint = showShortcutHint
+        self.activeRecall = activeRecall
+        self.activeRecallAutoSeconds = activeRecallAutoSeconds
         self.accentColor = accentColor
         self.userContext = userContext
     }
@@ -154,6 +163,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
         showExample = try container.decodeIfPresent(Bool.self, forKey: .showExample) ?? defaults.showExample
         showAIHint = try container.decodeIfPresent(Bool.self, forKey: .showAIHint) ?? defaults.showAIHint
         showShortcutHint = try container.decodeIfPresent(Bool.self, forKey: .showShortcutHint) ?? defaults.showShortcutHint
+        activeRecall = try container.decodeIfPresent(Bool.self, forKey: .activeRecall) ?? defaults.activeRecall
+        activeRecallAutoSeconds = try container.decodeIfPresent(Double.self, forKey: .activeRecallAutoSeconds) ?? defaults.activeRecallAutoSeconds
         accentColor = try container.decodeIfPresent(AccentColor.self, forKey: .accentColor) ?? defaults.accentColor
         userContext = try container.decodeIfPresent(String.self, forKey: .userContext) ?? defaults.userContext
     }

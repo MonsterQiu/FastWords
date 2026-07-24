@@ -46,4 +46,46 @@ final class WordBookImporterTests: XCTestCase {
             XCTAssertEqual(error as? WordBookImportError, .emptyWordBook)
         }
     }
+
+    func testImportsAnkiMetadataAndHTML() throws {
+        let entries = try WordBookImporter.importTXT("""
+        #separator:Tab
+        #html:true
+        abandon\t<b>放弃</b><br>抛弃
+        diversity\t多样性
+        """)
+        XCTAssertEqual(entries.count, 2)
+        XCTAssertEqual(entries[0].word, "abandon")
+        XCTAssertEqual(entries[0].meaning, "放弃 抛弃")
+        XCTAssertEqual(entries[1].word, "diversity")
+    }
+
+    func testImportsEudicStyleCSVHeaders() throws {
+        let entries = try WordBookImporter.importCSV("""
+        单词,音标,翻译,例句
+        schedule,/ˈskedʒuːl/,时间表,I have a busy schedule.
+        """)
+        XCTAssertEqual(entries.count, 1)
+        XCTAssertEqual(entries[0].word, "schedule")
+        XCTAssertEqual(entries[0].phonetic, "/ˈskedʒuːl/")
+        XCTAssertEqual(entries[0].meaning, "时间表")
+        XCTAssertEqual(entries[0].example, "I have a busy schedule.")
+    }
+
+    func testImportsAnkiFrontBackCSV() throws {
+        let entries = try WordBookImporter.importCSV("""
+        Front,Back
+        abandon,放弃；抛弃
+        brisk,轻快的
+        """)
+        XCTAssertEqual(entries.count, 2)
+        XCTAssertEqual(entries[0].word, "abandon")
+        XCTAssertEqual(entries[0].meaning, "放弃；抛弃")
+        XCTAssertEqual(entries[1].word, "brisk")
+    }
+
+    func testSanitizeFieldStripsHTML() {
+        let cleaned = WordBookImporter.sanitizeField("<div>hello<br/>world</div>")
+        XCTAssertEqual(cleaned, "hello world")
+    }
 }

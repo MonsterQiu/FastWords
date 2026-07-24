@@ -113,15 +113,16 @@ struct MenuBarPopoverView: View {
         .onChange(of: store.currentWord?.id) { _, _ in
             revealedDefinitionWordID = nil
         }
-        // Auto-reveal the meaning if the user lingers on a word for 10s. The
-        // task is keyed to the word id, so switching words cancels and restarts
-        // the countdown; a manual reveal earlier just makes this set a no-op.
-        .task(id: store.currentWord?.id) {
-            guard let id = store.currentWord?.id else { return }
+        // Active-recall auto-reveal: only when enabled and delay > 0.
+        // Keyed to word id so switching cards cancels and restarts the timer.
+        .task(id: "\(store.currentWord?.id.uuidString ?? "")-\(store.settings.activeRecall)-\(store.settings.activeRecallAutoSeconds)") {
+            guard store.settings.activeRecall else { return }
+            let delay = store.settings.activeRecallAutoSeconds
+            guard delay > 0, let id = store.currentWord?.id else { return }
             do {
-                try await Task.sleep(for: .seconds(10))
+                try await Task.sleep(for: .seconds(delay))
             } catch {
-                return  // cancelled — word changed or popover closed
+                return
             }
             withAnimation(.easeOut(duration: 0.3)) {
                 revealedDefinitionWordID = id
@@ -500,7 +501,8 @@ struct MenuBarPopoverView: View {
 
     private func wordDetail(_ entry: WordEntry) -> some View {
         let settings = store.settings
-        let meaningRevealed = revealedDefinitionWordID == entry.id
+        // Off → always show; on → mask until tap / auto-reveal.
+        let meaningRevealed = !settings.activeRecall || revealedDefinitionWordID == entry.id
         return VStack(alignment: .leading, spacing: 12) {
             if settings.showShortcutHint {
                 shortcutHint
@@ -625,7 +627,9 @@ struct MenuBarPopoverView: View {
 
     private func meaningBlock(_ entry: WordEntry, isRevealed: Bool) -> some View {
         let (pos, body) = MeaningFormatter.splitPartOfSpeech(entry.meaning)
-        return glassMeaningCard(entry: entry, isRevealed: isRevealed || body.isEmpty) {
+        // Empty meaning, or active-recall off → never show the frosted veil.
+        let showClear = isRevealed || body.isEmpty || !store.settings.activeRecall
+        return glassMeaningCard(entry: entry, isRevealed: showClear) {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 if let pos {
                     Text(pos)

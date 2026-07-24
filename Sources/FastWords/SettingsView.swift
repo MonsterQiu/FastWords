@@ -104,6 +104,14 @@ struct SettingsView: View {
         ("90 分钟", 5400)
     ]
 
+    private let autoRevealOptions: [(String, Double)] = [
+        ("仅点击揭示（不自动）", 0),
+        ("3 秒后自动显示", 3),
+        ("5 秒后自动显示", 5),
+        ("10 秒后自动显示", 10),
+        ("15 秒后自动显示", 15)
+    ]
+
     private var reviewSettings: some View {
         Form {
             SwiftUI.Section {
@@ -119,9 +127,27 @@ struct SettingsView: View {
                     }
                 }
 
-                Text("「智能」模式按间隔重复（SM-2）优先安排到期和薄弱的单词。")
+                Text("「智能」模式按 FSRS 间隔重复优先安排到期和薄弱的单词。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+            }
+
+            SwiftUI.Section {
+                Toggle("主动回忆（遮住中文释义）", isOn: binding(\.activeRecall))
+
+                if store.settings.activeRecall {
+                    Picker("自动显示释义", selection: binding(\.activeRecallAutoSeconds)) {
+                        ForEach(autoRevealOptions, id: \.1) { option in
+                            Text(option.0).tag(option.1)
+                        }
+                    }
+                }
+
+                Text("开启后中文释义先模糊遮罩，点击或等待设定时间后再显示，便于先回忆再对照。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } header: {
+                Text("主动回忆")
             }
         }
         .formStyle(.grouped)

@@ -67,13 +67,73 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func configureStatusItem() {
         guard let button = statusItem.button else { return }
         button.target = self
-        button.action = #selector(togglePopover)
+        // Left-click → word card; right-click → status menu (settings / quit).
+        button.action = #selector(statusItemClicked(_:))
         button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         // Truncate (don't expand) inside the fixed-width button so the item
         // keeps a constant width and the popover anchor never moves.
         button.lineBreakMode = .byTruncatingTail
         button.cell?.truncatesLastVisibleLine = true
         button.imagePosition = .noImage
+    }
+
+    @objc
+    private func statusItemClicked(_ sender: Any?) {
+        guard let event = NSApp.currentEvent, let button = statusItem.button else {
+            togglePopover()
+            return
+        }
+        if event.type == .rightMouseUp {
+            // Close the card if open so the menu isn't fighting the popover.
+            if popover.isShown { popover.performClose(nil) }
+            let menu = buildStatusMenu()
+            menu.popUp(positioning: nil, at: NSPoint(x: 0, y: button.bounds.height + 2), in: button)
+        } else {
+            togglePopover()
+        }
+    }
+
+    private func buildStatusMenu() -> NSMenu {
+        let menu = NSMenu()
+
+        let openItem = NSMenuItem(
+            title: "打开单词卡",
+            action: #selector(openPopoverFromMenu),
+            keyEquivalent: ""
+        )
+        openItem.target = self
+        menu.addItem(openItem)
+
+        let settingsItem = NSMenuItem(
+            title: "设置…",
+            action: #selector(openSettingsFromMenu),
+            keyEquivalent: ","
+        )
+        settingsItem.target = self
+        menu.addItem(settingsItem)
+
+        menu.addItem(NSMenuItem.separator())
+
+        menu.addItem(NSMenuItem(
+            title: "退出 FastWords",
+            action: #selector(NSApplication.terminate(_:)),
+            keyEquivalent: "q"
+        ))
+
+        return menu
+    }
+
+    @objc
+    private func openPopoverFromMenu() {
+        guard let button = statusItem.button else { return }
+        if !popover.isShown {
+            popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+        }
+    }
+
+    @objc
+    private func openSettingsFromMenu() {
+        openSettings()
     }
 
     private func configurePopover() {
@@ -280,6 +340,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panel.allowedContentTypes = [
             .plainText,
             .commaSeparatedText,
+            .tabSeparatedText,
             .json
         ]
 
