@@ -1,4 +1,10 @@
 #!/usr/bin/env bash
+# Build dist/FastWords.app, then quit any running instance and open the new one
+# so you can try the latest build without manually restarting.
+#
+#   ./Scripts/package_app.sh           # package + relaunch (default)
+#   SKIP_RELAUNCH=1 ./Scripts/package_app.sh
+#   ./Scripts/package_app.sh --no-relaunch
 set -euo pipefail
 
 APP_NAME="FastWords"
@@ -12,6 +18,16 @@ CONTENTS_DIR="$APP_DIR/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"
 VERSION="$(cat "$VERSION_FILE")"
 BUILD_NUMBER="$(cat "$BUILD_FILE")"
+
+RELAUNCH=1
+for arg in "$@"; do
+  case "$arg" in
+    --no-relaunch|-n) RELAUNCH=0 ;;
+  esac
+done
+if [[ "${SKIP_RELAUNCH:-0}" == "1" ]]; then
+  RELAUNCH=0
+fi
 
 cd "$ROOT_DIR"
 swift build -c release
@@ -70,3 +86,32 @@ cat > "$CONTENTS_DIR/Info.plist" <<PLIST
 PLIST
 
 echo "Packaged $APP_DIR"
+
+relaunch_app() {
+  # Prefer a graceful quit (saves state via applicationWillTerminate).
+  if pgrep -x "$APP_NAME" >/dev/null 2>&1 || pgrep -f "/$APP_NAME.app/Contents/MacOS/$APP_NAME" >/dev/null 2>&1; then
+    echo "Quitting running ${APP_NAME}..."
+    osascript -e "tell application \"$APP_NAME\" to quit" >/dev/null 2>&1 || true
+    # Wait up to ~3s for a clean exit; then force-kill leftovers.
+    for _ in 1 2 3 4 5 6; do
+      if ! pgrep -x "$APP_NAME" >/dev/null 2>&1 \
+         && ! pgrep -f "/$APP_NAME.app/Contents/MacOS/$APP_NAME" >/dev/null 2>&1; then
+        break
+      fi
+      sleep 0.5
+    done
+    killall "$APP_NAME" 2>/dev/null || true
+    # Also stop copies launched from dist/ or .build/ that share the binary name.
+    pkill -f "/$APP_NAME.app/Contents/MacOS/$APP_NAME" 2>/dev/null || true
+    sleep 0.3
+  fi
+
+  echo "Opening $APP_DIR"
+  open "$APP_DIR"
+}
+
+if [[ "$RELAUNCH" == "1" ]]; then
+  relaunch_app
+else
+  echo "Skipped relaunch (SKIP_RELAUNCH=1 or --no-relaunch)."
+fi

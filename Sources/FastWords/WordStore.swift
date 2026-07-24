@@ -41,6 +41,53 @@ final class WordStore: ObservableObject {
         case failed(String)
     }
 
+    /// Pending search result awaiting "加入词书" / "仅本次查看".
+    struct PendingSearch: Equatable {
+        var entry: WordEntry
+        var sourceLabel: String
+    }
+
+    /// Why a search could not produce a card — drives the failure panel copy & actions.
+    enum SearchMissReason: Equatable {
+        /// Dictionary missed; local spelling candidates available (AI not tried yet).
+        case spellingSuggestions
+        /// Dictionary + AI both unusable or empty; not a real word.
+        case notAValidWord
+        /// Dictionary missed and AI is turned off.
+        case aiDisabled
+        /// Dictionary missed and AI base URL / key / model missing.
+        case aiNotConfigured
+        /// Dictionary missed and AI/network failed.
+        case lookupFailed(String)
+    }
+
+    /// Final or intermediate "no exact hit" panel for the search funnel.
+    struct SearchMiss: Equatable {
+        var query: String
+        var reason: SearchMissReason
+        var suggestions: [String]
+        /// When true, user can press "仍用 AI 查询" (spelling step only).
+        var canContinueWithAI: Bool
+    }
+
+    /// Import file parsed but not yet committed.
+    struct ImportPreview: Equatable {
+        var entries: [WordEntry]
+        var sourceName: String
+        var added: Int
+        var skipped: Int
+    }
+
+    /// Snapshot used to undo the last grade action.
+    private struct GradeUndoSnapshot {
+        var wordKey: String
+        var previousProgress: WordProgress?
+        var bookID: UUID
+        var previousIndex: Int
+        var dayKey: String
+        var previousDayCount: Int
+    }
+
     @Published private(set) var books: [WordBook] = []
     @Published private(set) var currentBookID: UUID?
     /// Daily review counts for the stats heatmap (yyyy-MM-dd → count).
@@ -49,11 +96,26 @@ final class WordStore: ObservableObject {
     /// truth for FSRS state & mastery, shared across every book.
     @Published private(set) var wordProgress: [String: WordProgress] = [:]
     @Published var settings = AppSettings() {
-        didSet { if !isLoading { save() } }
+        didSet {
+            guard !isLoading else { return }
+            KeychainHelper.saveAPIKey(settings.aiAPIKey)
+            save()
+        }
     }
     @Published private(set) var aiState: AIState = .idle
     @Published private(set) var lookupState: LookupState = .idle
     @Published private(set) var importMessage: String?
+    /// Temporary one-shot card from search ("仅本次查看") — not in any book.
+    @Published private(set) var temporaryPreview: WordEntry?
+    /// Dictionary/AI hit not yet in a book — user chooses add vs peek.
+    @Published private(set) var pendingSearch: PendingSearch?
+    /// Search funnel miss: spelling suggestions or terminal failure.
+    @Published private(set) var searchMiss: SearchMiss?
+    /// Drag/import confirmation sheet data.
+    @Published private(set) var importPreview: ImportPreview?
+    @Published private(set) var canUndoGrade = false
+
+    private var gradeUndo: GradeUndoSnapshot?
 
     /// Persisted-state schema written by this build.
     private static let currentSchemaVersion = 2
@@ -126,16 +188,33 @@ final class WordStore: ObservableObject {
     }
 
     var currentWord: WordEntry? {
+        if let preview = temporaryPreview { return preview }
         guard words.indices.contains(currentIndex) else { return nil }
         return words[currentIndex]
     }
+
+    /// True when the card is a transient search peek (not part of a book).
+    var isShowingTemporaryPreview: Bool { temporaryPreview != nil }
 
     var masteredCount: Int {
         words.filter { $0.status == .mastered }.count
     }
 
+    /// Learning words in the current book whose FSRS due date is today or earlier.
+    var dueTodayCount: Int {
+        let now = Date()
+        return words.reduce(0) { count, entry in
+            guard entry.status != .mastered else { return count }
+            return entry.fsrs.isDue(asOf: now) ? count + 1 : count
+        }
+    }
+
     var progressText: String {
         guard !words.isEmpty else { return "No words" }
+        let due = dueTodayCount
+        if due > 0 {
+            return "\(currentIndex + 1)/\(words.count) · 今日\(due) · \(masteredCount) mastered"
+        }
         return "\(currentIndex + 1)/\(words.count) · \(masteredCount) mastered"
     }
 
@@ -173,8 +252,7 @@ final class WordStore: ObservableObject {
     func selectBook(_ id: UUID) {
         guard books.contains(where: { $0.id == id }) else { return }
         currentBookID = id
-        aiState = .idle
-        lookupState = .idle
+        clearEphemeralCardState()
         importMessage = nil
         save()
     }
@@ -198,6 +276,52 @@ final class WordStore: ObservableObject {
         save()
     }
 
+    /// Remove **one** word from the current book (not the whole book).
+    /// - Temporary search peeks are dismissed without writing.
+    /// - Shared `wordProgress` is kept if the same word still exists in another book;
+    ///   otherwise the progress entry is removed too.
+    @discardableResult
+    func deleteCurrentWord() -> Bool {
+        // Peek-only card: just dismiss.
+        if temporaryPreview != nil {
+            let name = temporaryPreview?.word ?? ""
+            temporaryPreview = nil
+            importMessage = name.isEmpty ? "已关闭预览" : "已关闭「\(name)」的预览（未写入词书）"
+            return true
+        }
+
+        guard let bookIndex = currentBookIndex else { return false }
+        let idx = books[bookIndex].currentIndex
+        guard books[bookIndex].words.indices.contains(idx) else { return false }
+
+        let removed = books[bookIndex].words.remove(at: idx)
+        let key = progressKey(removed.word)
+        let bookName = books[bookIndex].name
+
+        // Keep the card position stable: land on the next word, or the previous if we
+        // deleted the last one.
+        let count = books[bookIndex].words.count
+        books[bookIndex].currentIndex = count == 0 ? 0 : min(idx, count - 1)
+
+        // Drop global progress only when no loaded book still contains this word.
+        let stillInSomeBook = books.contains { book in
+            book.words.contains { progressKey($0.word) == key }
+        }
+        if !stillInSomeBook {
+            wordProgress.removeValue(forKey: key)
+        }
+
+        // Undo snapshot may point at the deleted card — invalidate.
+        gradeUndo = nil
+        canUndoGrade = false
+        clearEphemeralCardState()
+        aiState = .idle
+        lookupState = .idle
+        importMessage = "已从《\(bookName)》删除 \(removed.word)"
+        save()
+        return true
+    }
+
     func load() {
         isLoading = true
         defer { isLoading = false }
@@ -207,6 +331,7 @@ final class WordStore: ObservableObject {
             let decoded = try JSONDecoder.fastWords.decode(PersistedState.self, from: data)
             settings = decoded.settings
             migrateSettingsIfNeeded(from: decoded.schemaVersion)
+            migrateAPIKeyToKeychain()
             reviewLog = decoded.reviewLog ?? [:]
             wordProgress = decoded.wordProgress ?? [:]
 
@@ -262,8 +387,23 @@ final class WordStore: ObservableObject {
         settings.showChinese = true
         settings.showEnglish = true
         settings.showPhonetic = true
+        settings.showExample = true
         settings.showAIHint = true
         settings.showShortcutHint = true
+    }
+
+    /// Move a plaintext API key out of settings into the Keychain (one-time),
+    /// then always rehydrate the in-memory key from Keychain.
+    private func migrateAPIKeyToKeychain() {
+        let fromJSON = settings.aiAPIKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !fromJSON.isEmpty {
+            KeychainHelper.saveAPIKey(fromJSON)
+            settings.aiAPIKey = "" // strip before any subsequent save
+        }
+        let fromKeychain = KeychainHelper.loadAPIKey()
+        if !fromKeychain.isEmpty {
+            settings.aiAPIKey = fromKeychain
+        }
     }
 
     func save() {
@@ -273,11 +413,13 @@ final class WordStore: ObservableObject {
                 withIntermediateDirectories: true
             )
 
+            // Never write the API key into state.json.
+            KeychainHelper.saveAPIKey(settings.aiAPIKey)
             let state = PersistedState(
                 schemaVersion: Self.currentSchemaVersion,
                 books: books,
                 currentBookID: currentBookID,
-                settings: settings,
+                settings: settings.encodingWithoutAPIKey(),
                 reviewLog: reviewLog,
                 wordProgress: wordProgress,
                 words: nil,
@@ -313,6 +455,7 @@ final class WordStore: ObservableObject {
     }
 
     func showNext() {
+        clearEphemeralCardState(clearPendingSearch: true)
         currentIndex = ReviewScheduler.nextIndex(
             currentIndex: currentIndex,
             words: words,
@@ -324,6 +467,7 @@ final class WordStore: ObservableObject {
     }
 
     func showPrevious() {
+        clearEphemeralCardState(clearPendingSearch: true)
         currentIndex = ReviewScheduler.previousIndex(currentIndex: currentIndex, wordCount: words.count)
         aiState = .idle
         save()
@@ -331,26 +475,110 @@ final class WordStore: ObservableObject {
 
     /// Record how well the current word was recalled, update its FSRS schedule
     /// and mastery status (in the shared global table), then advance.
+    /// Temporary search previews cannot be graded (not in a book).
     func grade(_ grade: ReviewGrade) {
-        guard let word = currentWord else { return }
+        guard temporaryPreview == nil else {
+            importMessage = "预览词请先加入词书后再评分。"
+            return
+        }
+        guard let word = currentWord, let bookID = currentBookID else { return }
         let now = Date()
         let key = progressKey(word.word)
+        let day = ReviewStats.dayKey(for: now)
+        let previousDayCount = reviewLog[day] ?? 0
+        gradeUndo = GradeUndoSnapshot(
+            wordKey: key,
+            previousProgress: wordProgress[key],
+            bookID: bookID,
+            previousIndex: currentIndex,
+            dayKey: day,
+            previousDayCount: previousDayCount
+        )
+        canUndoGrade = true
+
         let current = wordProgress[key]?.fsrs ?? word.fsrs
         let updated = FSRS.review(current, grade: grade, now: now, desiredRetention: settings.desiredRetention)
         // Mastery follows the FSRS schedule; shared across all books with this word.
         wordProgress[key] = WordProgress(fsrs: updated, status: FSRS.masteryStatus(for: updated))
         // Record one review for today's heatmap.
-        reviewLog[ReviewStats.dayKey(for: now), default: 0] += 1
+        reviewLog[day, default: 0] += 1
         showNext() // showNext() saves
     }
 
+    /// Undo the last `grade(_:)` — restores FSRS progress, position, and heatmap count.
+    @discardableResult
+    func undoLastGrade() -> Bool {
+        guard let snap = gradeUndo else { return false }
+        if let prev = snap.previousProgress {
+            wordProgress[snap.wordKey] = prev
+        } else {
+            wordProgress.removeValue(forKey: snap.wordKey)
+        }
+        if snap.previousDayCount == 0 {
+            reviewLog.removeValue(forKey: snap.dayKey)
+        } else {
+            reviewLog[snap.dayKey] = snap.previousDayCount
+        }
+        if books.contains(where: { $0.id == snap.bookID }) {
+            currentBookID = snap.bookID
+            if let bookIndex = books.firstIndex(where: { $0.id == snap.bookID }) {
+                let count = books[bookIndex].words.count
+                books[bookIndex].currentIndex = max(0, min(snap.previousIndex, max(count - 1, 0)))
+            }
+        }
+        gradeUndo = nil
+        canUndoGrade = false
+        clearEphemeralCardState()
+        importMessage = "已撤销上一次评分"
+        save()
+        return true
+    }
+
     func toggleMastered() {
-        guard let word = currentWord else { return }
+        guard temporaryPreview == nil, let word = currentWord else { return }
         let key = progressKey(word.word)
         let p = wordProgress[key] ?? WordProgress(fsrs: word.fsrs, status: word.status)
         let nextStatus: WordStatus = p.status == .mastered ? .learning : .mastered
         wordProgress[key] = WordProgress(fsrs: p.fsrs, status: nextStatus)
         save()
+    }
+
+    /// Compute merge stats without writing — used for the import confirmation UI.
+    func previewImport(_ entries: [WordEntry], sourceName: String) {
+        guard !entries.isEmpty else {
+            importMessage = "没有可导入的单词。"
+            importPreview = nil
+            return
+        }
+        if let book = currentBook {
+            var existing = Set(book.words.map { $0.word.lowercased() })
+            var added = 0
+            var skipped = 0
+            for entry in entries {
+                let key = entry.word.lowercased()
+                if existing.contains(key) {
+                    skipped += 1
+                } else {
+                    existing.insert(key)
+                    added += 1
+                }
+            }
+            importPreview = ImportPreview(entries: entries, sourceName: sourceName, added: added, skipped: skipped)
+        } else {
+            importPreview = ImportPreview(entries: entries, sourceName: sourceName, added: entries.count, skipped: 0)
+        }
+        importMessage = nil
+    }
+
+    func confirmImportPreview() {
+        guard let preview = importPreview else { return }
+        importPreview = nil
+        importEntries(preview.entries, sourceName: preview.sourceName)
+    }
+
+    func cancelImportPreview() {
+        importPreview = nil
+        importMessage = "已取消导入"
     }
 
     /// Import a file's entries: merge into the current book if one exists
@@ -566,19 +794,50 @@ final class WordStore: ObservableObject {
 
     // MARK: - Word search
 
+    /// Prefix suggestions: current book first, then offline dictionary.
+    func searchSuggestions(for query: String, limit: Int = 8) -> [String] {
+        let key = progressKey(query)
+        guard key.count >= 1 else { return [] }
+
+        var seen = Set<String>()
+        var results: [String] = []
+
+        for entry in words {
+            let w = entry.word
+            let nk = progressKey(w)
+            guard nk.hasPrefix(key), !seen.contains(nk) else { continue }
+            seen.insert(nk)
+            results.append(w)
+            if results.count >= limit { return results }
+        }
+
+        for suggestion in OfflineDictionary.shared.suggestions(matching: key, limit: limit) {
+            let nk = progressKey(suggestion)
+            guard !seen.contains(nk) else { continue }
+            seen.insert(nk)
+            results.append(suggestion)
+            if results.count >= limit { break }
+        }
+        return results
+    }
+
     /// Jump to `query` if it already exists in any loaded book (case-insensitive).
     /// Prefers the current book; otherwise switches to the first book that has it.
+    /// Never shows the “add to book” prompt — the word is already collected.
     @discardableResult
-    func jumpToWord(_ query: String) -> Bool {
+    func jumpToWord(_ query: String, announce: Bool = false) -> Bool {
         let key = progressKey(query)
         guard !key.isEmpty else { return false }
 
         // Current book first — keeps the user in their active list.
         if let index = words.firstIndex(where: { progressKey($0.word) == key }) {
+            temporaryPreview = nil
+            pendingSearch = nil
+            searchMiss = nil
             currentIndex = index
             aiState = .idle
             lookupState = .idle
-            importMessage = nil
+            importMessage = announce ? "已在当前词书中，已跳转到 \(words[index].word)" : nil
             save()
             return true
         }
@@ -587,11 +846,15 @@ final class WordStore: ObservableObject {
         for bookIndex in books.indices {
             if books[bookIndex].id == currentBookID { continue }
             if let wordIndex = books[bookIndex].words.firstIndex(where: { progressKey($0.word) == key }) {
+                let found = books[bookIndex].words[wordIndex].word
+                temporaryPreview = nil
+                pendingSearch = nil
+                searchMiss = nil
                 currentBookID = books[bookIndex].id
                 books[bookIndex].currentIndex = wordIndex
                 aiState = .idle
                 lookupState = .idle
-                importMessage = "已切换到《\(books[bookIndex].name)》"
+                importMessage = "已在《\(books[bookIndex].name)》中，已跳转到 \(found)"
                 save()
                 return true
             }
@@ -599,11 +862,131 @@ final class WordStore: ObservableObject {
         return false
     }
 
+    /// Build a card entry from a dictionary/AI result and park it as pending
+    /// confirmation (join book vs peek once). Does not auto-append to the book.
+    /// If the word is already in a book, jumps there instead of asking to add.
+    func presentPendingSearch(word: String, result: DictionaryResult, sourceLabel: String) {
+        let trimmed = word.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        searchMiss = nil
+
+        // Belt-and-suspenders: never ask to add a word that is already collected.
+        if jumpToWord(trimmed, announce: true) {
+            return
+        }
+
+        let key = progressKey(trimmed)
+        var entry = WordEntry(
+            word: trimmed,
+            phonetic: result.phonetic,
+            phoneticUK: result.phonetic,
+            meaning: result.meaning,
+            englishDefinition: result.englishDefinition,
+            example: result.example
+        )
+        if let p = wordProgress[key] {
+            entry.fsrs = p.fsrs
+            entry.status = p.status
+        }
+
+        temporaryPreview = nil
+        pendingSearch = PendingSearch(entry: entry, sourceLabel: sourceLabel)
+        lookupState = .idle
+        importMessage = "\(sourceLabel)：选择加入词书或仅本次查看"
+    }
+
+    /// Commit the pending search result into the current book and jump to it.
+    func confirmPendingSearchAdd() {
+        guard let pending = pendingSearch else { return }
+        pendingSearch = nil
+        presentLookupWord(
+            pending.entry.word,
+            result: DictionaryResult(
+                phonetic: pending.entry.phonetic,
+                meaning: pending.entry.meaning,
+                englishDefinition: pending.entry.englishDefinition,
+                example: pending.entry.example
+            ),
+            sourceNote: "已加入当前词书"
+        )
+    }
+
+    /// Show the pending search result without adding it to any book.
+    func confirmPendingSearchPeek() {
+        guard let pending = pendingSearch else { return }
+        temporaryPreview = pending.entry
+        pendingSearch = nil
+        lookupState = .idle
+        importMessage = "仅本次查看（翻页后消失，不会写入词书）"
+    }
+
+    func dismissPendingSearch() {
+        pendingSearch = nil
+        if lookupState == .loading { return }
+        lookupState = .idle
+    }
+
+    func clearTemporaryPreview() {
+        temporaryPreview = nil
+    }
+
+    private func clearEphemeralCardState(clearPendingSearch: Bool = true) {
+        temporaryPreview = nil
+        searchMiss = nil
+        if clearPendingSearch { pendingSearch = nil }
+    }
+
+    // MARK: - Search miss funnel
+
+    func presentSearchMiss(_ miss: SearchMiss) {
+        temporaryPreview = nil
+        pendingSearch = nil
+        searchMiss = miss
+        lookupState = .idle
+        importMessage = nil
+    }
+
+    func dismissSearchMiss() {
+        searchMiss = nil
+        lookupState = .idle
+    }
+
+    /// Local spelling candidates for a headword (current book + ECDICT).
+    func spellingSuggestions(for headword: String, limit: Int = 5) -> [String] {
+        let extras = words.map(\.word)
+        return OfflineDictionary.shared.spellingCorrections(
+            for: headword,
+            extraWords: extras,
+            limit: limit
+        )
+    }
+
+    /// Offer a blank card for a headword (e.g. proper noun / deliberate typo study).
+    /// Does **not** write to the book yet — parks a pending confirmation so the user
+    /// can still pick「加入词书 / 仅本次查看 / 取消」, same as a dictionary hit.
+    func presentBlankPending(word: String) {
+        let trimmed = word.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        // Already collected → jump; never create a second blank copy.
+        if jumpToWord(trimmed, announce: true) {
+            return
+        }
+        presentPendingSearch(
+            word: trimmed,
+            result: DictionaryResult(),
+            sourceLabel: "空白卡片（暂无释义，确认后才写入词书）"
+        )
+    }
+
     /// Insert (or merge) a looked-up word into the current book, fill fields from
-    /// `result`, and make it the current card. Used after dictionary / AI search.
+    /// `result`, and make it the current card. Used after user confirms add.
     func presentLookupWord(_ word: String, result: DictionaryResult, sourceNote: String? = nil) {
         let trimmed = word.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
+
+        temporaryPreview = nil
+        pendingSearch = nil
 
         // Ensure we have a book to land in.
         if currentBookIndex == nil {

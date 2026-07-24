@@ -97,6 +97,39 @@ public final class OfflineDictionary: DictionaryService, @unchecked Sendable {
         return withLock { byWord[key] }
     }
 
+    /// Prefix suggestions for the search bar (case-insensitive). Prefers exact
+    /// prefix matches on the normalized key; returns up to `limit` headwords.
+    public func suggestions(matching prefix: String, limit: Int = 8) -> [String] {
+        let key = OfflineDictionary.normalize(prefix)
+        guard key.count >= 1, limit > 0 else { return [] }
+        ensureLoaded()
+        return withLock {
+            var matches: [String] = []
+            matches.reserveCapacity(limit)
+            // Prefer lexicographic order of keys for stable UI.
+            for (normalized, entry) in byWord.sorted(by: { $0.key < $1.key }) {
+                guard normalized.hasPrefix(key) else { continue }
+                matches.append(entry.word)
+                if matches.count >= limit { break }
+            }
+            return matches
+        }
+    }
+
+    /// Spelling corrections when an exact lookup misses (edit-distance over the
+    /// bundled exam vocabulary). Optional `extraWords` (e.g. current book) are
+    /// merged so user-imported terms can also be suggested.
+    public func spellingCorrections(for word: String, extraWords: [String] = [], limit: Int = 5) -> [String] {
+        let key = OfflineDictionary.normalize(word)
+        guard key.count >= 2 else { return [] }
+        ensureLoaded()
+        let dictWords = withLock { allEntries.map(\.word) }
+        // Prefer book words first in ranking by putting them at the front of the list
+        // (same distance → SpellingSuggester's sort still applies; extras help coverage).
+        let pool = extraWords + dictWords
+        return SpellingSuggester.suggestions(for: key, among: pool, limit: limit)
+    }
+
     // MARK: - Exam word books
 
     /// All words tagged with the given exam category, as ready-to-review entries.

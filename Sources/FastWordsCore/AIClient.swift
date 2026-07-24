@@ -5,6 +5,8 @@ public enum AIClientError: Error, LocalizedError {
     case missingConfiguration
     case invalidBaseURL
     case invalidResponse
+    /// Model judged the input not a valid English word/phrase.
+    case notAWord
     case requestFailed(String)
 
     public var errorDescription: String? {
@@ -17,6 +19,8 @@ public enum AIClientError: Error, LocalizedError {
             "AI base URL is invalid."
         case .invalidResponse:
             "AI response could not be read."
+        case .notAWord:
+            "Not recognized as an English word."
         case .requestFailed(let message):
             message
         }
@@ -52,24 +56,30 @@ public struct AIClient: Sendable {
             settings: settings,
             system: """
             你是一本简洁的英汉词典。用户查询一个英文单词或短语。
-            请严格按以下四行格式输出，不要编号、不要 markdown、不要多余寒暄：
+            若输入不是合理的英语单词或短语（乱码、纯中文、明显无意义），请只输出一行：
+            INVALID
+            否则严格按以下四行格式输出，不要编号、不要 markdown、不要多余寒暄：
             音标：/IPA/
             中文：词性. 中文释义（可多义，用分号分隔）
             英英：English definition in one or two short sentences
             例句：One natural English example sentence
-            若无法识别该词，四行仍输出，中文写「未找到该词」，其余可留空或写 unknown。
             """,
             user: "查询单词：\(trimmed)",
             temperature: 0.3
         )
 
+        let stripped = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        if stripped.uppercased().hasPrefix("INVALID") {
+            throw AIClientError.notAWord
+        }
+
         let parsed = Self.parseLookupResponse(content)
         guard !parsed.meaning.isEmpty || !parsed.englishDefinition.isEmpty else {
             throw AIClientError.invalidResponse
         }
-        // Treat "未找到" as a soft not-found so the UI can show a clear message.
+        // Soft not-found markers from older model habits.
         if parsed.meaning.contains("未找到") && parsed.englishDefinition.isEmpty {
-            throw AIClientError.invalidResponse
+            throw AIClientError.notAWord
         }
         return parsed
     }

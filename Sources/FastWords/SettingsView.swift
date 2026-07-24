@@ -95,10 +95,13 @@ struct SettingsView: View {
 
     private let refreshOptions: [(String, TimeInterval)] = [
         ("手动（不自动翻页）", 0),
+        ("5 秒", 5),
+        ("10 秒", 10),
         ("30 秒", 30),
         ("1 分钟", 60),
         ("5 分钟", 300),
-        ("15 分钟", 900)
+        ("15 分钟", 900),
+        ("90 分钟", 5400)
     ]
 
     private var reviewSettings: some View {
@@ -148,6 +151,7 @@ struct SettingsView: View {
                 Toggle("中文释义", isOn: binding(\.showChinese))
                 Toggle("英英释义", isOn: binding(\.showEnglish))
                 Toggle("音标", isOn: binding(\.showPhonetic))
+                Toggle("例句", isOn: binding(\.showExample))
                 Toggle("AI 记忆提示", isOn: binding(\.showAIHint))
                 Toggle("快捷键提示栏", isOn: binding(\.showShortcutHint))
             }
@@ -372,7 +376,7 @@ struct SettingsView: View {
             } header: {
                 Text("接口配置")
             } footer: {
-                Text("使用兼容 OpenAI 的 /chat/completions 接口，由你自己的服务商提供。")
+                Text("使用兼容 OpenAI 的 /chat/completions 接口，由你自己的服务商提供。API Key 保存在 macOS 钥匙串（Keychain），不会写入 state.json，也不会随 iCloud 词书文件同步。")
             }
 
             SwiftUI.Section {

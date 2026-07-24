@@ -178,6 +178,8 @@
 ## 验证与审查
 
 - 每个阶段完成后用 `run` / `verify` 真实跑起来确认行为。
+- **功能改完后自动打包**：`./Scripts/package_app.sh` → `dist/FastWords.app`（约定写入 `AGENTS.md` / `README.md`，无需用户再催）。
+- 发版 zip 用 `./Scripts/release.sh`，仅在用户要求发版时执行。
 - P0 完成后跑一次 `code-review`。
 - 遵循 karpathy 准则：小步、外科手术式改动、先定可验证成功标准。
 

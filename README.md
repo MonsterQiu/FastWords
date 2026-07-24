@@ -63,13 +63,15 @@ git clone https://github.com/MonsterQiu/FastWords.git
 cd FastWords
 
 swift build            # 编译
-swift test             # 跑测试（65 个单测）
+swift test             # 跑测试
 
-./Scripts/package_app.sh   # 打包成 dist/FastWords.app
-open dist/FastWords.app
+./Scripts/package_app.sh   # 打包 + 自动退出旧进程并打开新 app
+./Scripts/package_app.sh --no-relaunch   # 仅打包不重启
 
 ./Scripts/release.sh       # 生成可分发的 dist/FastWords-v0.2.1.zip
 ```
+
+> **开发约定**：改完会影响运行的应用代码后，应自动执行 `./Scripts/package_app.sh`（打包并**自动重启**到新版本，无需手动退出）。发版 zip 仍用 `release.sh`，仅在主动发版时执行。详见 [AGENTS.md](AGENTS.md)。
 
 ### 🔬 工作原理 / How It Works
 
@@ -134,13 +136,15 @@ git clone https://github.com/MonsterQiu/FastWords.git
 cd FastWords
 
 swift build            # compile
-swift test             # run tests (65 unit tests)
+swift test             # run tests
 
-./Scripts/package_app.sh   # package into dist/FastWords.app
-open dist/FastWords.app
+./Scripts/package_app.sh   # package + quit old process + open new app
+./Scripts/package_app.sh --no-relaunch   # package only
 
 ./Scripts/release.sh       # produce a distributable dist/FastWords-v0.2.1.zip
 ```
+
+> **Dev convention**: after code changes that affect the running app, always run `./Scripts/package_app.sh` (packages and **auto-relaunches** the new build). Use `release.sh` only when cutting a release. See [AGENTS.md](AGENTS.md).
 
 ### 📜 License
 

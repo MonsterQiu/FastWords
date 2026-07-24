@@ -94,10 +94,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     speak: { [weak self] accent in self?.speakCurrentWord(accent: accent) },
                     lookUp: { [weak self] in self?.lookUpCurrentWord() },
                     openSystemDictionary: { [weak self] in self?.openSystemDictionary() },
+                    openSystemDictionaryFor: { [weak self] word in self?.openSystemDictionary(for: word) },
                     importWordBook: { [weak self] in self?.importWordBook() },
+                    importDroppedFile: { [weak self] url in self?.handleDroppedWordBook(url: url) },
                     restoreSamples: { [weak self] in self?.store.restoreSamples(); self?.advanced() },
                     generateAIInsight: { [weak self] in self?.generateAIInsight() },
-                    searchWord: { [weak self] query in self?.searchWord(query) },
+                    searchWord: { [weak self] query in self?.searchWord(query, skipSpellingGate: false) },
+                    continueSearchWithAI: { [weak self] headword in self?.searchWord(headword, skipSpellingGate: true) },
+                    confirmSearchAdd: { [weak self] in
+                        self?.store.confirmPendingSearchAdd()
+                        self?.advanced()
+                    },
+                    confirmSearchPeek: { [weak self] in
+                        self?.store.confirmPendingSearchPeek()
+                        self?.updateStatusTitle()
+                    },
+                    dismissSearchPending: { [weak self] in self?.store.dismissPendingSearch() },
+                    dismissSearchMiss: { [weak self] in self?.store.dismissSearchMiss() },
+                    addBlankWord: { [weak self] word in
+                        // Pending confirm only — does not write until user taps 加入词书.
+                        self?.store.presentBlankPending(word: word)
+                        self?.updateStatusTitle()
+                    },
+                    confirmImport: { [weak self] in
+                        self?.store.confirmImportPreview()
+                        self?.updateStatusTitle()
+                    },
+                    cancelImport: { [weak self] in self?.store.cancelImportPreview() },
+                    undoGrade: { [weak self] in
+                        _ = self?.store.undoLastGrade()
+                        self?.updateStatusTitle()
+                    },
+                    deleteCurrentWord: { [weak self] in
+                        _ = self?.store.deleteCurrentWord()
+                        self?.updateStatusTitle()
+                    },
                     openSettings: { [weak self] in self?.openSettings() },
                     quit: { NSApp.terminate(nil) }
                 )
@@ -212,9 +243,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func openSystemDictionary() {
-        guard let word = store.currentWord?.word,
-              let url = URL(string: "dict://\(word.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? word)")
-        else { return }
+        guard let word = store.currentWord?.word else { return }
+        openSystemDictionary(for: word)
+    }
+
+    private func openSystemDictionary(for word: String) {
+        let encoded = word.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? word
+        guard let url = URL(string: "dict://\(encoded)") else { return }
         NSWorkspace.shared.open(url)
     }
 
@@ -259,7 +294,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         do {
             let entries = try WordBookImporter.importEntries(from: url)
-            store.importEntries(entries, sourceName: url.lastPathComponent)
+            // Preview first: user confirms added/skipped counts before merge.
+            store.previewImport(entries, sourceName: url.lastPathComponent)
+            updateStatusTitle()
+        } catch {
+            store.showImportError(error.localizedDescription)
+        }
+    }
+
+    /// Called when a file is dropped onto the popover (TXT / CSV / JSON).
+    func handleDroppedWordBook(url: URL) {
+        let shouldStopAccessing = url.startAccessingSecurityScopedResource()
+        defer {
+            if shouldStopAccessing {
+                url.stopAccessingSecurityScopedResource()
+            }
+        }
+        do {
+            let entries = try WordBookImporter.importEntries(from: url)
+            store.previewImport(entries, sourceName: url.lastPathComponent)
             updateStatusTitle()
         } catch {
             store.showImportError(error.localizedDescription)
@@ -285,15 +338,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// Search bar flow: jump to an existing card if present; otherwise look up
-    /// the offline/online dictionary; if still missing, fall back to the AI
-    /// endpoint and present the result as a normal word card.
-    private func searchWord(_ query: String) {
+    /// Search funnel:
+    /// 1) normalize headword  2) jump if in book  3) dictionary
+    /// 4) local spelling suggestions (unless skipped)  5) AI  6) typed failure panel
+    ///
+    /// - Parameter skipSpellingGate: when true (user tapped “仍用 AI 查询”), skip the
+    ///   intermediate spelling panel and go straight to AI / terminal failure.
+    private func searchWord(_ query: String, skipSpellingGate: Bool) {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
-        // Already in a loaded book → just navigate.
-        if store.jumpToWord(trimmed) {
+        // "diversity 什么意思" → headword "diversity". Match books by headword only.
+        let headword = SearchQueryNormalizer.headword(from: trimmed)
+        guard !headword.isEmpty else { return }
+
+        store.dismissSearchMiss()
+
+        // Already in any loaded book → jump there; never show “加入词书”.
+        if store.jumpToWord(headword, announce: true) {
             advanced()
             return
         }
@@ -304,52 +366,98 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Task {
             // 1) Offline ECDICT + Free Dictionary API.
             do {
-                let result = try await dictionary.lookup(trimmed)
-                let wordID = await MainActor.run { () -> UUID in
-                    self.store.presentLookupWord(
-                        trimmed,
+                let result = try await dictionary.lookup(headword)
+                await MainActor.run {
+                    self.store.presentPendingSearch(
+                        word: headword,
                         result: result,
-                        sourceNote: "词典查询成功，已加入当前词书"
+                        sourceLabel: "词典查询成功"
                     )
-                    self.advanced()
-                    return self.store.currentWord?.id ?? UUID()
+                    self.updateStatusTitle()
                 }
                 if let audioURL = result.audioURL {
-                    if let name = try? await audioCache.ensureCached(audioURL) {
-                        await MainActor.run { self.store.setAudioFileName(name, forWordID: wordID) }
-                    }
+                    _ = try? await audioCache.ensureCached(audioURL)
                 }
                 return
             } catch {
-                // fall through to AI
+                // fall through
             }
 
-            // 2) AI fallback when dictionaries miss.
-            do {
-                let result = try await AIClient().lookupDefinition(for: trimmed, settings: settings)
+            // 2) Local spelling suggestions before spending AI (unless user already skipped).
+            let suggestions = await MainActor.run {
+                self.store.spellingSuggestions(for: headword)
+            }
+            if !skipSpellingGate, !suggestions.isEmpty {
                 await MainActor.run {
-                    self.store.presentLookupWord(
-                        trimmed,
-                        result: result,
-                        sourceNote: "词典未收录，已通过 AI 补充释义"
+                    self.store.presentSearchMiss(
+                        WordStore.SearchMiss(
+                            query: headword,
+                            reason: .spellingSuggestions,
+                            suggestions: suggestions,
+                            canContinueWithAI: true
+                        )
                     )
-                    self.advanced()
+                    self.updateStatusTitle()
                 }
-            } catch let error as AIClientError {
-                let message: String
-                switch error {
-                case .disabled:
-                    message = "词典未收录。请在设置中启用 AI 后重试。"
-                case .missingConfiguration:
-                    message = "词典未收录。请在设置中配置 AI（地址 / Key / 模型）。"
-                default:
-                    message = "查询失败：\(error.localizedDescription)"
-                }
-                await MainActor.run { self.store.failLookup(message) }
-            } catch {
-                await MainActor.run {
-                    self.store.failLookup("查询失败：\(error.localizedDescription)")
-                }
+                return
+            }
+
+            // 3) AI fallback.
+            await self.finishSearchWithAI(headword: headword, settings: settings, suggestions: suggestions)
+        }
+    }
+
+    private func finishSearchWithAI(
+        headword: String,
+        settings: AppSettings,
+        suggestions: [String]
+    ) async {
+        do {
+            let result = try await AIClient().lookupDefinition(for: headword, settings: settings)
+            await MainActor.run {
+                self.store.presentPendingSearch(
+                    word: headword,
+                    result: result,
+                    sourceLabel: "AI 补充释义"
+                )
+                self.updateStatusTitle()
+            }
+        } catch let error as AIClientError {
+            let reason: WordStore.SearchMissReason
+            switch error {
+            case .disabled:
+                reason = .aiDisabled
+            case .missingConfiguration:
+                reason = .aiNotConfigured
+            case .notAWord:
+                reason = .notAValidWord
+            case .requestFailed(let msg):
+                reason = .lookupFailed(msg)
+            case .invalidResponse, .invalidBaseURL:
+                reason = .lookupFailed(error.localizedDescription)
+            }
+            await MainActor.run {
+                self.store.presentSearchMiss(
+                    WordStore.SearchMiss(
+                        query: headword,
+                        reason: reason,
+                        suggestions: suggestions,
+                        canContinueWithAI: false
+                    )
+                )
+                self.updateStatusTitle()
+            }
+        } catch {
+            await MainActor.run {
+                self.store.presentSearchMiss(
+                    WordStore.SearchMiss(
+                        query: headword,
+                        reason: .lookupFailed(error.localizedDescription),
+                        suggestions: suggestions,
+                        canContinueWithAI: false
+                    )
+                )
+                self.updateStatusTitle()
             }
         }
     }

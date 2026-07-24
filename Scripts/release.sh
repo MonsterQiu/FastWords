@@ -17,8 +17,9 @@ fi
 
 cd "$ROOT_DIR"
 
-# 1. Build & package the .app (writes dist/FastWords.app).
-"$ROOT_DIR/Scripts/package_app.sh"
+# 1. Build & package the .app (writes dist/FastWords.app). No auto-relaunch
+#    during release packaging — keeps CI / publish runs non-interactive.
+"$ROOT_DIR/Scripts/package_app.sh" --no-relaunch
 
 # 2. Build a zip named from the single source-of-truth version file.
 ZIP_PATH="$DIST_DIR/$APP_NAME-v$VERSION.zip"
