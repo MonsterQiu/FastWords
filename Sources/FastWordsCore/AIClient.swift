@@ -27,6 +27,61 @@ public struct AIClient: Sendable {
     public init() {}
 
     public func generateInsight(for entry: WordEntry, settings: AppSettings) async throws -> String {
+        let content = try await chat(
+            settings: settings,
+            system: """
+            你是一个记忆专家。请输出精简的记忆提示（总计不超过100字），绝不输出多余的寒暄或废话。
+            请严格按以下模板输出，替换括号内容：
+            🧩 [词根或谐音，30字以内]
+            📖 [结合用户身份的搞笑短句，40字以内]
+            """ + (entry.fsrs.lapses > 0 ? "\n💡 [一句话易混词辨析，30字以内]" : ""),
+            user: "单词：\(entry.word)\n释义：\(entry.meaning)\n用户身份/兴趣：\(settings.userContext.isEmpty ? "无特定背景" : settings.userContext)",
+            temperature: 0.7
+        )
+        return content
+    }
+
+    /// Look up an unknown word via the configured AI endpoint when the offline /
+    /// online dictionaries have no entry. Returns a `DictionaryResult` suitable
+    /// for displaying as a normal word card.
+    public func lookupDefinition(for word: String, settings: AppSettings) async throws -> DictionaryResult {
+        let trimmed = word.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { throw AIClientError.invalidResponse }
+
+        let content = try await chat(
+            settings: settings,
+            system: """
+            你是一本简洁的英汉词典。用户查询一个英文单词或短语。
+            请严格按以下四行格式输出，不要编号、不要 markdown、不要多余寒暄：
+            音标：/IPA/
+            中文：词性. 中文释义（可多义，用分号分隔）
+            英英：English definition in one or two short sentences
+            例句：One natural English example sentence
+            若无法识别该词，四行仍输出，中文写「未找到该词」，其余可留空或写 unknown。
+            """,
+            user: "查询单词：\(trimmed)",
+            temperature: 0.3
+        )
+
+        let parsed = Self.parseLookupResponse(content)
+        guard !parsed.meaning.isEmpty || !parsed.englishDefinition.isEmpty else {
+            throw AIClientError.invalidResponse
+        }
+        // Treat "未找到" as a soft not-found so the UI can show a clear message.
+        if parsed.meaning.contains("未找到") && parsed.englishDefinition.isEmpty {
+            throw AIClientError.invalidResponse
+        }
+        return parsed
+    }
+
+    // MARK: - Shared chat
+
+    private func chat(
+        settings: AppSettings,
+        system: String,
+        user: String,
+        temperature: Double
+    ) async throws -> String {
         guard settings.aiEnabled else { throw AIClientError.disabled }
         guard !settings.aiBaseURL.isEmpty, !settings.aiAPIKey.isEmpty, !settings.aiModel.isEmpty else {
             throw AIClientError.missingConfiguration
@@ -48,21 +103,10 @@ public struct AIClient: Sendable {
         request.httpBody = try JSONEncoder().encode(ChatRequest(
             model: settings.aiModel,
             messages: [
-                ChatMessage(
-                    role: "system",
-                    content: """
-                    你是一个记忆专家。请输出精简的记忆提示（总计不超过100字），绝不输出多余的寒暄或废话。
-                    请严格按以下模板输出，替换括号内容：
-                    🧩 [词根或谐音，30字以内]
-                    📖 [结合用户身份的搞笑短句，40字以内]
-                    """ + (entry.fsrs.lapses > 0 ? "\n💡 [一句话易混词辨析，30字以内]" : "")
-                ),
-                ChatMessage(
-                    role: "user",
-                    content: "单词：\(entry.word)\n释义：\(entry.meaning)\n用户身份/兴趣：\(settings.userContext.isEmpty ? "无特定背景" : settings.userContext)"
-                )
+                ChatMessage(role: "system", content: system),
+                ChatMessage(role: "user", content: user)
             ],
-            temperature: 0.7
+            temperature: temperature
         ))
 
         let (data, response) = try await URLSession.shared.data(for: request)
@@ -79,6 +123,52 @@ public struct AIClient: Sendable {
         }
 
         return content
+    }
+
+    /// Parse the fixed four-line lookup template into a `DictionaryResult`.
+    /// Public for unit tests.
+    public static func parseLookupResponse(_ text: String) -> DictionaryResult {
+        var phonetic = ""
+        var meaning = ""
+        var english = ""
+        var example = ""
+
+        for rawLine in text.components(separatedBy: .newlines) {
+            let line = rawLine.trimmingCharacters(in: .whitespaces)
+            if line.isEmpty { continue }
+
+            if let value = fieldValue(line, prefixes: ["音标：", "音标:", "Phonetic:", "phonetic:"]) {
+                phonetic = value
+            } else if let value = fieldValue(line, prefixes: ["中文：", "中文:", "Meaning:", "meaning:"]) {
+                meaning = value
+            } else if let value = fieldValue(line, prefixes: ["英英：", "英英:", "English:", "english:"]) {
+                english = value
+            } else if let value = fieldValue(line, prefixes: ["例句：", "例句:", "Example:", "example:"]) {
+                example = value
+            }
+        }
+
+        // Fallback: if the model ignored the template, use the whole text as meaning.
+        if meaning.isEmpty && english.isEmpty && !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            meaning = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        return DictionaryResult(
+            phonetic: phonetic,
+            meaning: meaning,
+            englishDefinition: english,
+            example: example,
+            audioURL: nil
+        )
+    }
+
+    private static func fieldValue(_ line: String, prefixes: [String]) -> String? {
+        for prefix in prefixes {
+            if line.hasPrefix(prefix) {
+                return String(line.dropFirst(prefix.count)).trimmingCharacters(in: .whitespaces)
+            }
+        }
+        return nil
     }
 }
 

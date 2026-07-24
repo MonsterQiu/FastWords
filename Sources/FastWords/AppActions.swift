@@ -12,6 +12,8 @@ struct AppActions {
     var importWordBook: () -> Void
     var restoreSamples: () -> Void
     var generateAIInsight: () -> Void
+    /// Search a word: jump if already in a book, else dictionary, else AI.
+    var searchWord: (String) -> Void
     var openSettings: () -> Void
     var quit: () -> Void
 }

@@ -77,7 +77,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func configurePopover() {
-        popover.behavior = .transient
+        // semitransient keeps the popover open while typing in the search field
+        // (transient often dismisses when the text field becomes first responder).
+        popover.behavior = .semitransient
         let contentSize = NSSize(width: 360, height: 540)
         popover.contentSize = contentSize
 
@@ -95,6 +97,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     importWordBook: { [weak self] in self?.importWordBook() },
                     restoreSamples: { [weak self] in self?.store.restoreSamples(); self?.advanced() },
                     generateAIInsight: { [weak self] in self?.generateAIInsight() },
+                    searchWord: { [weak self] query in self?.searchWord(query) },
                     openSettings: { [weak self] in self?.openSettings() },
                     quit: { NSApp.terminate(nil) }
                 )
@@ -277,6 +280,75 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             } catch {
                 await MainActor.run {
                     self.store.failAIInsight(error.localizedDescription)
+                }
+            }
+        }
+    }
+
+    /// Search bar flow: jump to an existing card if present; otherwise look up
+    /// the offline/online dictionary; if still missing, fall back to the AI
+    /// endpoint and present the result as a normal word card.
+    private func searchWord(_ query: String) {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        // Already in a loaded book → just navigate.
+        if store.jumpToWord(trimmed) {
+            advanced()
+            return
+        }
+
+        store.beginLookup()
+        let settings = store.settings
+
+        Task {
+            // 1) Offline ECDICT + Free Dictionary API.
+            do {
+                let result = try await dictionary.lookup(trimmed)
+                let wordID = await MainActor.run { () -> UUID in
+                    self.store.presentLookupWord(
+                        trimmed,
+                        result: result,
+                        sourceNote: "词典查询成功，已加入当前词书"
+                    )
+                    self.advanced()
+                    return self.store.currentWord?.id ?? UUID()
+                }
+                if let audioURL = result.audioURL {
+                    if let name = try? await audioCache.ensureCached(audioURL) {
+                        await MainActor.run { self.store.setAudioFileName(name, forWordID: wordID) }
+                    }
+                }
+                return
+            } catch {
+                // fall through to AI
+            }
+
+            // 2) AI fallback when dictionaries miss.
+            do {
+                let result = try await AIClient().lookupDefinition(for: trimmed, settings: settings)
+                await MainActor.run {
+                    self.store.presentLookupWord(
+                        trimmed,
+                        result: result,
+                        sourceNote: "词典未收录，已通过 AI 补充释义"
+                    )
+                    self.advanced()
+                }
+            } catch let error as AIClientError {
+                let message: String
+                switch error {
+                case .disabled:
+                    message = "词典未收录。请在设置中启用 AI 后重试。"
+                case .missingConfiguration:
+                    message = "词典未收录。请在设置中配置 AI（地址 / Key / 模型）。"
+                default:
+                    message = "查询失败：\(error.localizedDescription)"
+                }
+                await MainActor.run { self.store.failLookup(message) }
+            } catch {
+                await MainActor.run {
+                    self.store.failLookup("查询失败：\(error.localizedDescription)")
                 }
             }
         }

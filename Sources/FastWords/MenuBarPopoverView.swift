@@ -5,6 +5,10 @@ struct MenuBarPopoverView: View {
     @ObservedObject var store: WordStore
     let actions: AppActions
     @State private var revealedDefinitionWordID: UUID?
+    /// Bottom search bar: icon expands into a text field; Enter submits.
+    @State private var isSearchExpanded = false
+    @State private var searchQuery = ""
+    @FocusState private var isSearchFocused: Bool
 
     var body: some View {
         ZStack {
@@ -57,7 +61,10 @@ struct MenuBarPopoverView: View {
             .animation(.spring(response: 0.35, dampingFraction: 0.8), value: store.currentWord?.id)
 
             // Invisible buttons that own the keyboard shortcuts.
-            keyboardShortcuts
+            // Disable while the search field is open so Space/arrows type normally.
+            if !isSearchExpanded {
+                keyboardShortcuts
+            }
         }
         .frame(width: 360, height: 540)
         .tint(Theme.accent(for: store.settings.accentColor))
@@ -467,14 +474,99 @@ struct MenuBarPopoverView: View {
     }
 
     private func secondaryRow(_ entry: WordEntry) -> some View {
-        HStack(spacing: 12) {
-            iconLink("text.book.closed", tooltip: "系统词典", action: actions.openSystemDictionary)
-            iconLink("sparkles", tooltip: "AI 提示", action: actions.generateAIInsight)
-                .disabled(!store.settings.aiEnabled || store.aiState == .loading)
-            Spacer()
-            iconLink("gearshape", tooltip: "设置", action: actions.openSettings)
-            iconLink("door.left.hand.open", tooltip: "退出", action: actions.quit)
+        Group {
+            if isSearchExpanded {
+                searchBar
+            } else {
+                HStack(spacing: 12) {
+                    iconLink("magnifyingglass", tooltip: "搜索单词", action: expandSearch)
+                    iconLink("text.book.closed", tooltip: "系统词典", action: actions.openSystemDictionary)
+                    iconLink("sparkles", tooltip: "AI 提示", action: actions.generateAIInsight)
+                        .disabled(!store.settings.aiEnabled || store.aiState == .loading)
+                    Spacer()
+                    iconLink("gearshape", tooltip: "设置", action: actions.openSettings)
+                    iconLink("door.left.hand.open", tooltip: "退出", action: actions.quit)
+                }
+            }
         }
+        .animation(.easeInOut(duration: 0.2), value: isSearchExpanded)
+    }
+
+    private func expandSearch() {
+        withAnimation(.easeInOut(duration: 0.2)) {
+            isSearchExpanded = true
+        }
+        // Focus after the expand animation so the field is in the hierarchy.
+        DispatchQueue.main.async {
+            isSearchFocused = true
+        }
+    }
+
+    private func collapseSearch() {
+        isSearchFocused = false
+        searchQuery = ""
+        withAnimation(.easeInOut(duration: 0.2)) {
+            isSearchExpanded = false
+        }
+    }
+
+    private func submitSearch() {
+        let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return }
+        // Collapse first so the card UI updates cleanly; query is already captured.
+        let q = query
+        collapseSearch()
+        actions.searchWord(q)
+    }
+
+    /// Expanded bottom search field — Enter looks up the word (book → dictionary → AI).
+    private var searchBar: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(Theme.accent(for: store.settings.accentColor))
+
+            TextField("搜索单词，回车查询…", text: $searchQuery)
+                .textFieldStyle(.plain)
+                .font(.system(size: 14))
+                .focused($isSearchFocused)
+                .onSubmit { submitSearch() }
+                .disabled(store.lookupState == .loading)
+
+            if store.lookupState == .loading {
+                ProgressView()
+                    .controlSize(.small)
+            } else if !searchQuery.isEmpty {
+                Button {
+                    searchQuery = ""
+                    isSearchFocused = true
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 14))
+                        .foregroundStyle(Theme.inkSoft)
+                }
+                .buttonStyle(.plain)
+                .help("清空")
+            }
+
+            Button(action: collapseSearch) {
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Theme.inkSoft)
+                    .frame(width: 28, height: 28)
+                    .background(Color.primary.opacity(0.06), in: Circle())
+            }
+            .buttonStyle(ScaleButtonStyle())
+            .help("收起搜索")
+            .keyboardShortcut(.escape, modifiers: [])
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(Theme.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(Theme.accent(for: store.settings.accentColor).opacity(0.25), lineWidth: 1)
+        )
     }
 
     private func iconLink(_ systemImage: String, tooltip: String, action: @escaping () -> Void) -> some View {

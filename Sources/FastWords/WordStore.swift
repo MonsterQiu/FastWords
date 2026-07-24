@@ -563,6 +563,89 @@ final class WordStore: ObservableObject {
         words[index].audioFileName = name
         save()
     }
+
+    // MARK: - Word search
+
+    /// Jump to `query` if it already exists in any loaded book (case-insensitive).
+    /// Prefers the current book; otherwise switches to the first book that has it.
+    @discardableResult
+    func jumpToWord(_ query: String) -> Bool {
+        let key = progressKey(query)
+        guard !key.isEmpty else { return false }
+
+        // Current book first — keeps the user in their active list.
+        if let index = words.firstIndex(where: { progressKey($0.word) == key }) {
+            currentIndex = index
+            aiState = .idle
+            lookupState = .idle
+            importMessage = nil
+            save()
+            return true
+        }
+
+        // Other books: switch and land on the match.
+        for bookIndex in books.indices {
+            if books[bookIndex].id == currentBookID { continue }
+            if let wordIndex = books[bookIndex].words.firstIndex(where: { progressKey($0.word) == key }) {
+                currentBookID = books[bookIndex].id
+                books[bookIndex].currentIndex = wordIndex
+                aiState = .idle
+                lookupState = .idle
+                importMessage = "已切换到《\(books[bookIndex].name)》"
+                save()
+                return true
+            }
+        }
+        return false
+    }
+
+    /// Insert (or merge) a looked-up word into the current book, fill fields from
+    /// `result`, and make it the current card. Used after dictionary / AI search.
+    func presentLookupWord(_ word: String, result: DictionaryResult, sourceNote: String? = nil) {
+        let trimmed = word.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        // Ensure we have a book to land in.
+        if currentBookIndex == nil {
+            if books.isEmpty {
+                restoreSamples()
+            } else {
+                currentBookID = books.first?.id
+            }
+        }
+        guard let bookIndex = currentBookIndex else { return }
+
+        let key = progressKey(trimmed)
+        if let existing = books[bookIndex].words.firstIndex(where: { progressKey($0.word) == key }) {
+            books[bookIndex].currentIndex = existing
+            applyLookup(result)
+            if let sourceNote {
+                importMessage = sourceNote
+            }
+            return
+        }
+
+        var entry = WordEntry(
+            word: trimmed,
+            phonetic: result.phonetic,
+            phoneticUK: result.phonetic,
+            meaning: result.meaning,
+            englishDefinition: result.englishDefinition,
+            example: result.example
+        )
+        // Overlay shared progress if this word was studied in another book.
+        if let p = wordProgress[key] {
+            entry.fsrs = p.fsrs
+            entry.status = p.status
+        }
+
+        books[bookIndex].words.append(entry)
+        books[bookIndex].currentIndex = books[bookIndex].words.count - 1
+        aiState = .idle
+        lookupState = .idle
+        importMessage = sourceNote ?? "已加入《\(books[bookIndex].name)》"
+        save()
+    }
 }
 
 private extension JSONEncoder {
