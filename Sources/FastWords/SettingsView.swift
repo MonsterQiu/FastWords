@@ -107,33 +107,42 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                 }
 
-                HStack {
+                HStack(alignment: .top, spacing: 8) {
                     let trusted = SelectionReader.isTrusted(prompt: false)
                     Image(systemName: trusted ? "checkmark.shield.fill" : "exclamationmark.shield")
                         .foregroundStyle(trusted ? .green : .orange)
-                    Text(trusted ? "已获得辅助功能权限" : "需要辅助功能权限才能读取其它 App 的选中文本")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    if !trusted {
-                        Button("打开系统设置") {
-                            SelectionReader.openAccessibilitySettings()
-                            _ = SelectionReader.isTrusted(prompt: true)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(trusted ? "已获得辅助功能权限" : "尚未授权辅助功能（划词会失败）")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        if !trusted {
+                            Text("未签名安装时，每次重新打包都可能要重新勾选一次 FastWords。")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
                         }
+                    }
+                    Spacer()
+                    Button("打开系统设置") {
+                        SelectionReader.openAccessibilitySettings()
+                        _ = SelectionReader.isTrusted(prompt: true)
                     }
                 }
             } header: {
                 Text("全局划词")
             } footer: {
-                Text("在任意 App 中选中单词，按下 ⌥⌘W：打开 FastWords 并查询（词书已有则跳转，否则词典 / AI / 加入确认）。也可在系统「服务」菜单使用「加入 FastWords」（无需辅助功能）。")
+                Text("""
+                用法：在任意 App 中选中单词 → 按 ⌥⌘W。
+                流程：读选区（或模拟 ⌘C）→ 打开单词卡 → 查询 / 加入。
+                若无效：1) 确认本页开关已开 2) 辅助功能列表里勾选 dist/FastWords.app 3) 浏览器可选中后先 ⌘C 再 ⌥⌘W。
+                """)
             }
 
             SwiftUI.Section {
-                Text("服务菜单路径：选中文本 → 右键或 App 菜单 → 服务 → 加入 FastWords。若没有该项，打开「系统设置 → 键盘 → 键盘快捷键 → 服务」确认已勾选。")
+                Text("备选：选中文本 → 菜单「服务」→「加入 FastWords」。右键菜单栏 W 图标也可用「从剪贴板加入」/「测试划词」。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } header: {
-                Text("系统服务（备选）")
+                Text("其它入口")
             }
         }
         .formStyle(.grouped)

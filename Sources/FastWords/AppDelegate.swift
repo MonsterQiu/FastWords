@@ -36,10 +36,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         updateStatusTitle()
     }
 
-    /// ⌥⌘W global capture + Accessibility selection read.
+    /// ⌥⌘W global capture + Accessibility selection read (with ⌘C fallback).
     private func configureWordCapture() {
         wordCapture.onCapture = { [weak self] text in
             self?.processCapturedText(text)
+        }
+        wordCapture.onNeedsPermission = { [weak self] in
+            guard let self else { return }
+            self.store.showImportError("划词需要「辅助功能」权限：设置 → 划词 → 打开系统设置，勾选 FastWords 后重试 ⌥⌘W")
+            self.openPopoverFromMenu()
+            SelectionReader.openAccessibilitySettings()
         }
         wordCapture.setEnabled(store.settings.globalCaptureEnabled)
     }
@@ -69,14 +75,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func processCapturedText(_ raw: String) {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
-            store.showImportError("请先选中一个单词，再按 ⌥⌘W（需辅助功能权限）")
+            let ax = SelectionReader.isTrusted(prompt: false)
+            store.showImportError(
+                ax
+                    ? "未读到选中文本。请先高亮单词再按 ⌥⌘W（浏览器里可先 ⌘C 再试）"
+                    : "请先在「系统设置 → 隐私与安全性 → 辅助功能」中勾选 FastWords，然后重新选中单词按 ⌥⌘W"
+            )
             openPopoverFromMenu()
+            if !ax { SelectionReader.openAccessibilitySettings() }
             return
         }
 
         let headword = SearchQueryNormalizer.headword(from: trimmed)
         guard !headword.isEmpty else {
-            store.showImportError("未能从选区识别出英文单词")
+            store.showImportError("未能从「\(trimmed.prefix(24))」识别出英文单词")
             openPopoverFromMenu()
             return
         }
@@ -165,6 +177,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         clipItem.target = self
         menu.addItem(clipItem)
 
+        let testItem = NSMenuItem(
+            title: "测试划词 (⌥⌘W)",
+            action: #selector(testWordCapture),
+            keyEquivalent: ""
+        )
+        testItem.target = self
+        menu.addItem(testItem)
+
         let settingsItem = NSMenuItem(
             title: "设置…",
             action: #selector(openSettingsFromMenu),
@@ -188,6 +208,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func addFromClipboard() {
         let text = NSPasteboard.general.string(forType: .string) ?? ""
         processCapturedText(text)
+    }
+
+    @objc
+    private func testWordCapture() {
+        Task { @MainActor in
+            await self.wordCapture.fire()
+        }
     }
 
     @objc

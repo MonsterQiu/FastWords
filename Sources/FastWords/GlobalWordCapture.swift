@@ -1,95 +1,130 @@
 import AppKit
+import Carbon
+import Carbon.HIToolbox
 import FastWordsCore
 
 /// Global hotkey (⌥⌘W) that captures the system text selection and hands it to
-/// the app for lookup / add-to-book. Requires Accessibility permission.
+/// the app for lookup / add-to-book.
+///
+/// Uses Carbon `RegisterEventHotKey` (more reliable than `NSEvent` global
+/// monitors, which silently fail without Accessibility on some macOS versions).
 @MainActor
 final class GlobalWordCapture {
-    /// Called on the main actor with the raw selected string (not yet normalized).
+    /// Called with the raw selected/copied string (may be empty on failure).
     var onCapture: ((String) -> Void)?
+    /// Called when the hotkey fired but monitors could not be installed / AX denied.
+    var onNeedsPermission: (() -> Void)?
 
-    private var globalMonitor: Any?
-    private var localMonitor: Any?
     private var enabled = false
+    // Carbon refs are not Sendable; kept for app-lifetime capture only.
+    nonisolated(unsafe) private var hotKeyRef: EventHotKeyRef?
+    nonisolated(unsafe) private var handlerRef: EventHandlerRef?
+    private var isCapturing = false
 
-    /// Default chord: Option + Command + W (“Word”).
-    private let requiredFlags: NSEvent.ModifierFlags = [.option, .command]
-    private let keyCharacter = "w"
-
-    deinit {
-        // Monitors must be removed; deinit is nonisolated — tear down sync via MainActor if needed.
-        // In practice the capture lives for the app lifetime.
-    }
+    /// Carbon hotkey id (unique per app).
+    private let hotKeyID = EventHotKeyID(signature: OSType(0x4657_5244), id: 1) // 'FWRD'
 
     func setEnabled(_ on: Bool) {
         enabled = on
-        rebuildMonitors()
-    }
-
-    func rebuildMonitors() {
-        if let globalMonitor {
-            NSEvent.removeMonitor(globalMonitor)
-            self.globalMonitor = nil
-        }
-        if let localMonitor {
-            NSEvent.removeMonitor(localMonitor)
-            self.localMonitor = nil
-        }
-
-        guard enabled else { return }
-
-        let handler: (NSEvent) -> Void = { [weak self] event in
-            guard let self, self.matchesHotkey(event) else { return }
-            // Defer so we don't re-enter the event stream mid-dispatch.
-            DispatchQueue.main.async {
-                self.fire()
-            }
-        }
-
-        // Other apps (needs Accessibility for the monitor itself on recent macOS).
-        globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { event in
-            handler(event)
-        }
-        // When FastWords is key (e.g. settings open).
-        localMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            guard let self else { return event }
-            if self.matchesHotkey(event) {
-                handler(event)
-                return nil // swallow so it doesn't type "w" into a field
-            }
-            return event
+        if on {
+            installHotKey()
+        } else {
+            removeHotKey()
         }
     }
 
-    private func matchesHotkey(_ event: NSEvent) -> Bool {
-        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-        // Require ⌥⌘; reject if Shift/Control also held (keeps the chord exclusive).
-        guard flags.contains(.option), flags.contains(.command) else { return false }
-        guard !flags.contains(.shift), !flags.contains(.control) else { return false }
-        let chars = event.charactersIgnoringModifiers?.lowercased() ?? ""
-        return chars == keyCharacter
+    // MARK: - Carbon hotkey
+
+    private func installHotKey() {
+        removeHotKey()
+
+        // Install handler first.
+        var eventType = EventTypeSpec(
+            eventClass: OSType(kEventClassKeyboard),
+            eventKind: UInt32(kEventHotKeyPressed)
+        )
+
+        let userData = Unmanaged.passUnretained(self).toOpaque()
+        let status = InstallEventHandler(
+            GetApplicationEventTarget(),
+            { _, _, userData -> OSStatus in
+                guard let userData else { return noErr }
+                let capture = Unmanaged<GlobalWordCapture>.fromOpaque(userData).takeUnretainedValue()
+                Task { @MainActor in
+                    await capture.fire()
+                }
+                return noErr
+            },
+            1,
+            &eventType,
+            userData,
+            &handlerRef
+        )
+
+        if status != noErr {
+            NSLog("FastWords: InstallEventHandler failed: \(status)")
+        }
+
+        // ⌥⌘W — keyCode is layout-stable (unlike charactersIgnoringModifiers with Option).
+        var ref: EventHotKeyRef?
+        let reg = RegisterEventHotKey(
+            UInt32(kVK_ANSI_W),
+            UInt32(optionKey | cmdKey),
+            hotKeyID,
+            GetApplicationEventTarget(),
+            0,
+            &ref
+        )
+        if reg != noErr {
+            NSLog("FastWords: RegisterEventHotKey failed: \(reg)")
+            onNeedsPermission?()
+            return
+        }
+        hotKeyRef = ref
     }
 
-    private func fire() {
-        // Prompt once if not trusted, then try to read selection.
+    private func removeHotKey() {
+        if let hotKeyRef {
+            UnregisterEventHotKey(hotKeyRef)
+            self.hotKeyRef = nil
+        }
+        if let handlerRef {
+            RemoveEventHandler(handlerRef)
+            self.handlerRef = nil
+        }
+    }
+
+    // MARK: - Capture
+
+    func fire() async {
+        guard enabled, !isCapturing else { return }
+        isCapturing = true
+        defer { isCapturing = false }
+
         if !SelectionReader.isTrusted(prompt: false) {
+            // Show system prompt once; user must also toggle the app in Settings
+            // after each rebuild of an ad-hoc-signed binary.
             _ = SelectionReader.isTrusted(prompt: true)
+            if !SelectionReader.isTrusted(prompt: false) {
+                onNeedsPermission?()
+            }
         }
 
-        if let text = SelectionReader.selectedText() {
+        if let text = await SelectionReader.captureSelection() {
             onCapture?(text)
             return
         }
 
-        // Fallback: general pasteboard (user may have just copied).
+        // Last resort: whatever is already on the pasteboard (short only).
         if let clip = NSPasteboard.general.string(forType: .string)?
             .trimmingCharacters(in: .whitespacesAndNewlines),
            !clip.isEmpty,
-           clip.count <= 80 {
+           clip.count <= 80,
+           clip.contains(where: \.isLetter) {
             onCapture?(clip)
             return
         }
 
-        onCapture?("") // empty → caller shows “请先选中单词”
+        onCapture?("")
     }
 }
